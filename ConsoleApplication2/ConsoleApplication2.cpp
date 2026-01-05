@@ -20,6 +20,8 @@ struct Player {
 
 Player player = { ARENA_WIDTH / 2, ARENA_HEIGHT / 2 };
 
+char arena[ARENA_HEIGHT][ARENA_WIDTH];
+
 void gotoXY(int x, int y)
 {
     COORD coord = {x, y};
@@ -34,7 +36,7 @@ void draw(int x, int y, char c) {
     gotoXY(0, ARENA_HEIGHT + 1);// Move cursor out of the way
 }
 
-void drawArena()
+void initArena()
 {
     for (int y = 0; y < ARENA_HEIGHT; y++)
     {
@@ -42,7 +44,25 @@ void drawArena()
         {
             if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
             {
-                draw(x, y, WALL_CHAR);
+				arena[y][x] = WALL_CHAR;
+            }
+            else
+            {
+				arena[y][x] = ' ';
+            }
+        }
+    }
+}
+
+void drawArena()
+{
+    for (int y = 0; y < ARENA_HEIGHT; y++)
+    {
+        for (int x = 0; x < ARENA_WIDTH; x++)
+        {
+            if (arena[y][x] == WALL_CHAR)
+            {
+				draw(x, y, WALL_CHAR);
             }
         }
     }
@@ -50,28 +70,30 @@ void drawArena()
 }
 
 void movePlayer(char direction) {
-    draw(player.x, player.y, ' ');
+	int nextX = player.x;
+	int nextY = player.y;
 
-    switch (direction) {
-    case 'w':
-        if (player.y > 1) player.y--;
-        break;
-    case 's':
-        if (player.y < ARENA_HEIGHT - 2) player.y++;
-        break;
-    case 'a':
-        if (player.x > 1) player.x--;
-        break;
-    case 'd':
-        if (player.x < ARENA_WIDTH - 2) player.x++;
-        break;
+    switch(direction) {
+	    case 'w': nextY--; break;
+	    case 's': nextY++; break;
+	    case 'a': nextX--; break;
+	    case 'd': nextX++; break;
     }
 
-    draw(player.x, player.y, PLAYER_CHAR);
+    if (arena[nextY][nextX] != WALL_CHAR)
+    {
+		draw(player.x, player.y, ' '); // Erase old position
+
+		player.x = nextX;
+		player.y = nextY;
+
+		draw(player.x, player.y, PLAYER_CHAR);
+    }
 }
 
 int main()
 {
+	initArena();
     drawArena();
 
     while (true)
@@ -79,6 +101,7 @@ int main()
         if (_kbhit()) {
             movePlayer(_getch());
         }
+        
     }
 
     return 0;
