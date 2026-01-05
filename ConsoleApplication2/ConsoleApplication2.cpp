@@ -12,40 +12,74 @@ const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
 
+// GLOBAL VARIABLES
 struct Player {
     int x;
     int y;
 };
 
+Player player = { ARENA_WIDTH / 2, ARENA_HEIGHT / 2 };
+
 void gotoXY(int x, int y)
 {
-    COORD coord = {x,y};
+    COORD coord = {x, y};
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
 void draw(int x, int y, char c) {
     gotoXY(x, y);
-	cout << c;
-	gotoXY(0, ARENA_HEIGHT); // Move cursor out of the way
+
+    cout << c;
+    
+    gotoXY(0, ARENA_HEIGHT + 1);// Move cursor out of the way
 }
 
-
-int main()
+void drawArena()
 {
-    for (size_t y = 0; y < ARENA_HEIGHT; y++)
+    for (int y = 0; y < ARENA_HEIGHT; y++)
     {
-        for (size_t x = 0; x < ARENA_WIDTH; x++)
+        for (int x = 0; x < ARENA_WIDTH; x++)
         {
             if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
             {
-				draw(x, y, WALL_CHAR);
+                draw(x, y, WALL_CHAR);
             }
         }
     }
+    draw(player.x, player.y, PLAYER_CHAR);
+}
 
-	Player player = { ARENA_WIDTH / 2, ARENA_HEIGHT / 2 };
+void movePlayer(char direction) {
+    draw(player.x, player.y, ' ');
 
-	draw(player.x, player.y, PLAYER_CHAR);
+    switch (direction) {
+    case 'w':
+        if (player.y > 1) player.y--;
+        break;
+    case 's':
+        if (player.y < ARENA_HEIGHT - 2) player.y++;
+        break;
+    case 'a':
+        if (player.x > 1) player.x--;
+        break;
+    case 'd':
+        if (player.x < ARENA_WIDTH - 2) player.x++;
+        break;
+    }
+
+    draw(player.x, player.y, PLAYER_CHAR);
+}
+
+int main()
+{
+    drawArena();
+
+    while (true)
+    {
+        if (_kbhit()) {
+            movePlayer(_getch());
+        }
+    }
 
     return 0;
 }
