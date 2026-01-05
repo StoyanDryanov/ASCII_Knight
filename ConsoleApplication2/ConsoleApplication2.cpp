@@ -14,11 +14,13 @@ const char PLAYER_CHAR = '@';
 
 // GLOBAL VARIABLES
 struct Player {
-    int x;
-    int y;
+    float x;
+    float y;
+    float dx;
+	float dy;
 };
 
-Player player = { ARENA_WIDTH / 2, ARENA_HEIGHT / 2 };
+Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0};
 
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
@@ -28,8 +30,8 @@ void gotoXY(int x, int y)
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
-void draw(int x, int y, char c) {
-    gotoXY(x, y);
+void draw(float x, float y, char c) {
+    gotoXY((int)x, (int)y);
 
     cout << c;
     
@@ -70,24 +72,13 @@ void drawArena()
 }
 
 void movePlayer(char direction) {
-	int nextX = player.x;
-	int nextY = player.y;
+    player.dx = 0;
+	player.dy = 0;
 
     switch(direction) {
-	    case 'w': nextY--; break;
-	    case 's': nextY++; break;
-	    case 'a': nextX--; break;
-	    case 'd': nextX++; break;
-    }
-
-    if (arena[nextY][nextX] != WALL_CHAR)
-    {
-		draw(player.x, player.y, ' '); // Erase old position
-
-		player.x = nextX;
-		player.y = nextY;
-
-		draw(player.x, player.y, PLAYER_CHAR);
+	    case 'w': player.dy = -1.0f; break;
+	    case 'a': player.dx = -1.0f; break;
+	    case 'd': player.dx = 1.0f; break;
     }
 }
 
