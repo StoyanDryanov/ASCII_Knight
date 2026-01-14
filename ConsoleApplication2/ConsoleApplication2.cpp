@@ -6,169 +6,139 @@
 
 using namespace std;
 
-// CONSTANTS
+// ========== CONSTANTS ==========
 const int ARENA_WIDTH = 80;
-const int ARENA_HEIGHT = 30;
+const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
 const float GRAVITY = 0.1f;
 const float JUMP_FORCE = -1.5f;
+const int MAX_JUMPS = 2;
 
-// GLOBAL VARIABLES
+// ========== GLOBAL VARIABLES ==========
 struct Player {
     float x, y;
-    float dx, dy;
+    float dy;
+    int hp;
+    int jumps;
+    bool grounded;
     int lastX, lastY;
-	bool isGrounded;
-	int jumpCount; // tracks how many jumps have been made
 };
 
-Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2), false, 0 };
+Player player = { 
+    ARENA_WIDTH / 2.0f,
+    ARENA_HEIGHT / 2.0f,
+    0,
+    5,
+    false,
+    (int)(ARENA_WIDTH / 2),
+    (int)(ARENA_HEIGHT / 2),
+    };
 
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
-void gotoXY(int x, int y)
-{
+void gotoXY(int x, int y){
     COORD coord = {x, y};
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
 void draw(float x, float y, char c) {
     gotoXY((int)x, (int)y);
-
     cout << c;
-    
     gotoXY(0, ARENA_HEIGHT + 1);// Move cursor out of the way
 }
 
 void hideCursor() {
     HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_CURSOR_INFO info;
-    info.dwSize = 100;
-    info.bVisible = FALSE;
+    CONSOLE_CURSOR_INFO info = { 100, FALSE };
     SetConsoleCursorInfo(consoleHandle, &info);
 }
 
-void initArena()
-{
-    for (int y = 0; y < ARENA_HEIGHT; y++)
-    {
-        for (int x = 0; x < ARENA_WIDTH; x++)
-        {
-            if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
-            {
-				arena[y][x] = WALL_CHAR;
-            }
-            else
-            {
-				arena[y][x] = ' ';
-            }
-        }
-    }
-}
+void initGame(){
 
-void drawArena()
-{
-    for (int y = 0; y < ARENA_HEIGHT; y++)
-    {
-        for (int x = 0; x < ARENA_WIDTH; x++)
-        {
-            if (arena[y][x] == WALL_CHAR)
-            {
-				draw(x, y, WALL_CHAR);
-            }
+	hideCursor();
+
+    for (int y = 0; y < ARENA_HEIGHT; y++) {
+        for (int x = 0; x < ARENA_WIDTH; x++) {
+            if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
+                cout << WALL_CHAR;
+            else 
+                cout << ' ';
         }
+		cout << endl;
     }
-    draw(player.x, player.y, PLAYER_CHAR);
 }
 
 void handleInput() {
-	player.dx = 0;
+    if (_kbhit()) {
+        char key = _getch();
 
-    if(_kbhit()) {
-		char ch = _getch();
-        GetAsyncKeyState('A');
+        if (key == 'a' && player.x > 1) player.x--;
+        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x++;
 
-		if (ch == 'a') player.dx = -1.0;
-		if (ch == 'd') player.dx = 1.0;
-
-        if (ch == 'w') {
-            if (player.isGrounded) {
+        if (key == 'w') {
+            if (player.grounded) {
                 player.dy = JUMP_FORCE;
-                player.isGrounded = false;
-                player.jumpCount = 1;
+                player.grounded = false;
+                player.jumps = 1;
             }
-            else if (player.jumpCount < 2) {
+            else if (player.jumps < MAX_JUMPS) {
                 player.dy = JUMP_FORCE;
-                player.jumpCount++;
+                player.jumps++;
             }
         }
-	}
+    }
 }
 
 void updatePhysics() {
     player.dy += GRAVITY;
+    player.y += player.dy;
 
-    float nextY = player.y + player.dy;
-
-	// Boundary to prevent going out of arena
-    if (nextY < 0) nextY = 0;
-    if (nextY >= ARENA_HEIGHT) nextY = (float)ARENA_HEIGHT - 1;
-
-    // Collision with walls
-    if (arena[(int)nextY][(int)player.x] == WALL_CHAR) {
-		if (player.dy > 0) // hitting the ground
-        {
-            player.isGrounded = true;
-            player.y = (float)((int)nextY - 1);
-            player.dy = 0;
-			player.jumpCount = 0; // reset jump count upon landing
-        }
-		else if (player.dy < 0) // hitting the ceiling
-        {
-            player.y = (float)((int)nextY + 1);
-            player.dy = 0;
-        }
+    // Floor collision
+    if (player.y >= ARENA_HEIGHT - 2) {
+        player.y = (float)ARENA_HEIGHT - 2;
+        player.dy = 0;
+        player.grounded = true;
+        player.jumps = 0;
     }
-    else {
-		player.y = nextY;
-    }
-
-    float nextX = player.x + player.dx;
-
-	// Boundary to prevent going out of arena
-    if (nextX < 0) nextX = 0;
-    if (nextX >= ARENA_WIDTH) nextX = (float)ARENA_WIDTH - 1;
-
-    if (arena[(int)player.y][(int)nextX] == WALL_CHAR) {
-        player.dx = 0;
-    }
-    else {
-        player.x = nextX;
-    }
-
-    if (arena[(int)(player.y + 0.1f)][(int)player.x] == WALL_CHAR) {
-        player.isGrounded = true;
+    // Ceiling collision
+    if (player.y <= 1) {
+        player.y = 1;
         player.dy = 0;
     }
 }
 
+void render() {
+    gotoXY(0, 0);
+    string hpStr = " HP: ";
+    for (int i = 0; i < player.hp; i++) hpStr += "0-";
+
+    string controls = " (a/d move, w jump, i/j/k/l attack) ";
+    string topBorder = "##" + hpStr + controls;
+
+    while (topBorder.length() < ARENA_WIDTH) {
+        topBorder += WALL_CHAR;
+    }
+    cout << topBorder;
+
+    gotoXY(player.lastX, player.lastY);
+    cout << ' ';
+
+    player.lastX = (int)player.x;
+    player.lastY = (int)player.y;
+    gotoXY(player.lastX, player.lastY);
+    cout << PLAYER_CHAR;
+}
+
 int main()
 {
-	initArena();
-    drawArena();
-	hideCursor();
-    while (true)
-    {
-        draw((float)player.lastX, (float)player.lastY, ' ');
+	initGame();
 
+    while (player.hp > 0)
+    {
 		handleInput();
         updatePhysics();
-
-        player.lastX = (int)player.x;
-        player.lastY = (int)player.y;
-
-        draw(player.x,player.y, PLAYER_CHAR);
+		render();
 
 		Sleep(33);
     }
