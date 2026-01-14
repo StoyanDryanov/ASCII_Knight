@@ -11,8 +11,9 @@ const int ARENA_WIDTH = 80;
 const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
+const float PLAYER_SPEED = 0.5f;
 const float GRAVITY = 0.05f;
-const float JUMP_FORCE = -1.2f;
+const float JUMP_FORCE = -1.0f;
 const int MAX_JUMPS = 2;
 
 // ========== GLOBAL VARIABLES ==========
@@ -71,8 +72,8 @@ void handleInput(float dt) {
     if (_kbhit()) {
         char key = _getch();
 
-        if (key == 'a' && player.x > 1) player.x -= 1.0f * dt;
-        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x += 1.0 * dt;
+        if (key == 'a' && player.x > 1) player.x -= PLAYER_SPEED * dt;
+        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x += PLAYER_SPEED * dt;
 
         if (key == 'w') {
             if (player.grounded) {
