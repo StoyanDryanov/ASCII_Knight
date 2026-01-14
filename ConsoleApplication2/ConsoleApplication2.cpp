@@ -18,9 +18,10 @@ struct Player {
     float x, y;
     float dx, dy;
     int lastX, lastY;
+	bool isGrounded;
 };
 
-Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2) };
+Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2), false };
 
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
@@ -72,37 +73,64 @@ void drawArena()
 }
 
 void handleInput() {
+	player.dx = 0;
+
     if(_kbhit()) {
 		char ch = _getch();
 
-		if (ch == 'a') player.dx = -1.0f;
-		if (ch == 'd') player.dx = 1.0f;
+		if (ch == 'a') player.dx = -1.0;
+		if (ch == 'd') player.dx = 1.0;
 
-		if (ch == 'w') player.dy = -1.5f; // Infinite jumps
+        if (ch == 'w' && player.isGrounded) {
+            player.dy = -1.5f;
+            player.isGrounded = false;
+        }
 	}
-	else {
-		player.dx *= 0.5f;
-    }
 }
 
 void updatePhysics() {
     player.dy += GRAVITY;
 
-    float nextX = player.x + player.dx;
     float nextY = player.y + player.dy;
 
+	// Boundary to prevent going out of arena
+    if (nextY < 0) nextY = 0;
+    if (nextY >= ARENA_HEIGHT) nextY = (float)ARENA_HEIGHT - 1;
+
     // Collision with walls
-    if (arena[(int)nextY][(int)nextX] == WALL_CHAR) {
-        player.dy = 0;
+    if (arena[(int)nextY][(int)player.x] == WALL_CHAR) {
+		if (player.dy > 0) // hitting the ground
+        {
+            player.isGrounded = true;
+            player.y = (float)((int)nextY - 1);
+            player.dy = 0;
+        }
+		else if (player.dy < 0) // hitting the ceiling
+        {
+            player.y = (float)((int)nextY - 1);
+            player.dy = 0;
+        }
     }
     else {
 		player.y = nextY;
     }
 
-    if(arena[(int)player.y][(int)player.x] == WALL_CHAR) {
-		player.dx = 0;
-    } else {
-		player.x = nextX;
+    float nextX = player.x + player.dx;
+
+	// Boundary to prevent going out of arena
+    if (nextX < 0) nextX = 0;
+    if (nextX >= ARENA_WIDTH) nextX = (float)ARENA_WIDTH - 1;
+
+    if (arena[(int)player.y][(int)nextX] == WALL_CHAR) {
+        player.dx = 0;
+    }
+    else {
+        player.x = nextX;
+    }
+
+    if (arena[(int)(player.y + 0.1f)][(int)player.x] == WALL_CHAR) {
+        player.isGrounded = true;
+        player.dy = 0;
     }
 }
 
