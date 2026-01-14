@@ -11,8 +11,8 @@ const int ARENA_WIDTH = 80;
 const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
-const float GRAVITY = 0.1f;
-const float JUMP_FORCE = -1.5f;
+const float GRAVITY = 0.05f;
+const float JUMP_FORCE = -1.2f;
 const int MAX_JUMPS = 2;
 
 // ========== GLOBAL VARIABLES ==========
@@ -35,17 +35,13 @@ Player player = {
     (int)(ARENA_HEIGHT / 2),
     };
 
+clock_t lastTime;
+
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
 void gotoXY(int x, int y){
     COORD coord = {x, y};
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-}
-
-void draw(float x, float y, char c) {
-    gotoXY((int)x, (int)y);
-    cout << c;
-    gotoXY(0, ARENA_HEIGHT + 1);// Move cursor out of the way
 }
 
 void hideCursor() {
@@ -67,14 +63,16 @@ void initGame(){
         }
 		cout << endl;
     }
+
+    lastTime = clock();
 }
 
-void handleInput() {
+void handleInput(float dt) {
     if (_kbhit()) {
         char key = _getch();
 
-        if (key == 'a' && player.x > 1) player.x--;
-        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x++;
+        if (key == 'a' && player.x > 1) player.x -= 1.0f * dt;
+        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x += 1.0 * dt;
 
         if (key == 'w') {
             if (player.grounded) {
@@ -90,9 +88,9 @@ void handleInput() {
     }
 }
 
-void updatePhysics() {
-    player.dy += GRAVITY;
-    player.y += player.dy;
+void updatePhysics(float dt) {
+    player.dy += GRAVITY * dt;
+    player.y += player.dy * dt;
 
     // Floor collision
     if (player.y >= ARENA_HEIGHT - 2) {
@@ -136,11 +134,15 @@ int main()
 
     while (player.hp > 0)
     {
-		handleInput();
-        updatePhysics();
+        clock_t currentTime = clock();
+        float dt = float(currentTime - lastTime) / CLOCKS_PER_SEC * 60.0f;
+		lastTime = currentTime;
+
+		handleInput(dt);
+        updatePhysics(dt);
 		render();
 
-		Sleep(33);
+		Sleep(16);
     }
 
     return 0;
