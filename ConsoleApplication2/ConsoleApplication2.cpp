@@ -11,16 +11,16 @@ const int ARENA_WIDTH = 60;
 const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
+const float GRAVITY = 0.1f;
 
 // GLOBAL VARIABLES
 struct Player {
-    float x;
-    float y;
-    float dx;
-	float dy;
+    float x, y;
+    float dx, dy;
+    int lastX, lastY;
 };
 
-Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0};
+Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2) };
 
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
@@ -71,14 +71,38 @@ void drawArena()
     draw(player.x, player.y, PLAYER_CHAR);
 }
 
-void movePlayer(char direction) {
-    player.dx = 0;
-	player.dy = 0;
+void handleInput() {
+    if(_kbhit()) {
+		char ch = _getch();
 
-    switch(direction) {
-	    case 'w': player.dy = -1.0f; break;
-	    case 'a': player.dx = -1.0f; break;
-	    case 'd': player.dx = 1.0f; break;
+		if (ch == 'a') player.dx = -1.0f;
+		if (ch == 'd') player.dx = 1.0f;
+
+		if (ch == 'w') player.dy = -1.5f; // Infinite jumps
+	}
+	else {
+		player.dx *= 0.5f;
+    }
+}
+
+void updatePhysics() {
+    player.dy += GRAVITY;
+
+    float nextX = player.x + player.dx;
+    float nextY = player.y + player.dy;
+
+    // Collision with walls
+    if (arena[(int)nextY][(int)nextX] == WALL_CHAR) {
+        player.dy = 0;
+    }
+    else {
+		player.y = nextY;
+    }
+
+    if(arena[(int)player.y][(int)player.x] == WALL_CHAR) {
+		player.dx = 0;
+    } else {
+		player.x = nextX;
     }
 }
 
@@ -89,10 +113,17 @@ int main()
 
     while (true)
     {
-        if (_kbhit()) {
-            movePlayer(_getch());
-        }
-        
+        draw((float)player.lastX, (float)player.lastY, ' ');
+
+		handleInput();
+        updatePhysics();
+
+        player.lastX = (int)player.x;
+        player.lastY = (int)player.y;
+
+        draw(player.x,player.y, PLAYER_CHAR);
+
+		Sleep(33);
     }
 
     return 0;
