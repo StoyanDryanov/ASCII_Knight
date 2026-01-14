@@ -7,11 +7,12 @@
 using namespace std;
 
 // CONSTANTS
-const int ARENA_WIDTH = 60;
-const int ARENA_HEIGHT = 20;
+const int ARENA_WIDTH = 100;
+const int ARENA_HEIGHT = 30;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
 const float GRAVITY = 0.1f;
+const float JUMP_FORCE = -1.5f;
 
 // GLOBAL VARIABLES
 struct Player {
@@ -19,9 +20,10 @@ struct Player {
     float dx, dy;
     int lastX, lastY;
 	bool isGrounded;
+	int jumpCount; // tracks how many jumps have been made
 };
 
-Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2), false };
+Player player = { ARENA_WIDTH / 2.0f, ARENA_HEIGHT / 2.0f, 0, 0, (int)(ARENA_WIDTH / 2), (int)(ARENA_HEIGHT / 2), false, 0 };
 
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
@@ -90,9 +92,16 @@ void handleInput() {
 		if (ch == 'a') player.dx = -1.0;
 		if (ch == 'd') player.dx = 1.0;
 
-        if (ch == 'w' && player.isGrounded) {
-            player.dy = -1.5f;
-            player.isGrounded = false;
+        if (ch == 'w') {
+            if (player.isGrounded) {
+                player.dy = JUMP_FORCE;
+                player.isGrounded = false;
+                player.jumpCount = 1;
+            }
+            else if (player.jumpCount < 2) {
+                player.dy = JUMP_FORCE;
+                player.jumpCount++;
+            }
         }
 	}
 }
@@ -113,6 +122,7 @@ void updatePhysics() {
             player.isGrounded = true;
             player.y = (float)((int)nextY - 1);
             player.dy = 0;
+			player.jumpCount = 0; // reset jump count upon landing
         }
 		else if (player.dy < 0) // hitting the ceiling
         {
