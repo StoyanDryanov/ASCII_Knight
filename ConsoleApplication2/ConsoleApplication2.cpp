@@ -11,6 +11,7 @@ const int ARENA_WIDTH = 80;
 const int ARENA_HEIGHT = 20;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
+const char PLATFORM_CHAR = '=';
 const float PLAYER_SPEED = 0.5f;
 const float GRAVITY = 0.05f;
 const float JUMP_FORCE = -1.0f;
@@ -41,7 +42,7 @@ clock_t lastTime;
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
 void gotoXY(int x, int y){
-    COORD coord = {x, y};
+    COORD coord = {(SHORT)x, (SHORT)y};
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
@@ -52,19 +53,48 @@ void hideCursor() {
 }
 
 void initGame(){
-
 	hideCursor();
+    srand((unsigned int)time(NULL)); // Seed RNG for different platforms each run
 
     for (int y = 0; y < ARENA_HEIGHT; y++) {
         for (int x = 0; x < ARENA_WIDTH; x++) {
             if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
-                cout << WALL_CHAR;
-            else 
-                cout << ' ';
+                arena[y][x] = WALL_CHAR;
+            else
+                arena[y][x] = ' ';
         }
-		cout << endl;
     }
 
+    for (int i = 0; i < 4; i++) {
+        int pWidth = rand() % 10 + 10; // Width between 10 and 20
+        int pX, pY;
+
+        if (i < 2) { // Two on the left side
+            pX = rand() % 15 + 5;
+        }
+        else {     // Two on the right side
+            pX = rand() % 15 + 50;
+        }
+
+        // Space them out vertically
+        pY = (i % 2 == 0) ? (ARENA_HEIGHT * 0.35) : (ARENA_HEIGHT * 0.65);
+        pY += (rand() % 3 - 1); // Add a small random height offset
+
+        for (int x = 0; x < pWidth; x++) {
+            if (pX + x < ARENA_WIDTH - 1)
+                arena[pY][pX + x] = PLATFORM_CHAR;
+        }
+    }
+
+    for (int y = 0; y < ARENA_HEIGHT; y++) {
+        for (int x = 0; x < ARENA_WIDTH; x++) {
+            cout << arena[y][x];
+        }
+        cout << endl;
+    }
+
+    player.lastX = (int)player.x;
+    player.lastY = (int)player.y;
     lastTime = clock();
 }
 
@@ -90,22 +120,66 @@ void handleInput(float dt) {
 }
 
 void updatePhysics(float dt) {
+    // Apply gravity
     player.dy += GRAVITY * dt;
+
+    float oldY = player.y;
     player.y += player.dy * dt;
 
-    // Floor collision
+    player.grounded = false;
+
+    int px = (int)player.x;
+    int py = (int)player.y;
+
+    // ===== Platform collision when falling =====
+    if (player.dy > 0) {
+        int belowY = py + 1;
+
+        if (belowY >= 0 && belowY < ARENA_HEIGHT &&
+            px >= 0 && px < ARENA_WIDTH) {
+
+            if (arena[belowY][px] == PLATFORM_CHAR &&
+                oldY <= belowY - 1) {
+
+                player.y = (float)(belowY - 1);
+                player.dy = 0;
+                player.grounded = true;
+                player.jumps = 0;
+            }
+        }
+    }
+    // ===== Platform collision when jumping =====
+    if (player.dy < 0) {
+        int aboveY = py; 
+
+        if (aboveY >= 0 && aboveY < ARENA_HEIGHT &&
+            px >= 0 && px < ARENA_WIDTH) {
+
+            // Check if hitting a platform or wall from BELOW
+            if ((arena[aboveY][px] == PLATFORM_CHAR || arena[aboveY][px] == WALL_CHAR) &&
+                oldY >= (float)(aboveY + 1)) {
+
+                player.y = (float)(aboveY + 1); 
+                player.dy = 0;                  
+            }
+        }
+    }
+
+    // ===== Floor collision =====
     if (player.y >= ARENA_HEIGHT - 2) {
         player.y = (float)ARENA_HEIGHT - 2;
         player.dy = 0;
         player.grounded = true;
         player.jumps = 0;
     }
-    // Ceiling collision
+
+    // ===== Ceiling collision =====
     if (player.y <= 1) {
         player.y = 1;
         player.dy = 0;
     }
 }
+
 
 void render() {
     gotoXY(0, 0);
