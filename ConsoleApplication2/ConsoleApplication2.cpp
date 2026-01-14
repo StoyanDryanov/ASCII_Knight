@@ -39,6 +39,14 @@ void draw(float x, float y, char c) {
     gotoXY(0, ARENA_HEIGHT + 1);// Move cursor out of the way
 }
 
+void hideCursor() {
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = FALSE;
+    SetConsoleCursorInfo(consoleHandle, &info);
+}
+
 void initArena()
 {
     for (int y = 0; y < ARENA_HEIGHT; y++)
@@ -77,6 +85,7 @@ void handleInput() {
 
     if(_kbhit()) {
 		char ch = _getch();
+        GetAsyncKeyState('A');
 
 		if (ch == 'a') player.dx = -1.0;
 		if (ch == 'd') player.dx = 1.0;
@@ -138,7 +147,7 @@ int main()
 {
 	initArena();
     drawArena();
-
+	hideCursor();
     while (true)
     {
         draw((float)player.lastX, (float)player.lastY, ' ');
