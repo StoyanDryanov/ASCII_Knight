@@ -7,7 +7,7 @@
 using namespace std;
 
 // CONSTANTS
-const int ARENA_WIDTH = 100;
+const int ARENA_WIDTH = 80;
 const int ARENA_HEIGHT = 30;
 const char WALL_CHAR = '#';
 const char PLAYER_CHAR = '@';
@@ -126,7 +126,7 @@ void updatePhysics() {
         }
 		else if (player.dy < 0) // hitting the ceiling
         {
-            player.y = (float)((int)nextY - 1);
+            player.y = (float)((int)nextY + 1);
             player.dy = 0;
         }
     }
