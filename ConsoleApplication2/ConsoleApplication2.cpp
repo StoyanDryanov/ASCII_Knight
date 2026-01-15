@@ -394,7 +394,31 @@ void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x,b
     }
 
     // No collision, apply new position
-    player.y = newY;
+    y = newY;
+}
+
+void updateEnemyPhysics(Enemy& enemy, float dt) {
+    if (!enemy.active)
+        return;
+
+    enemy.dy += GRAVITY * dt;
+
+    float oldY = enemy.y;
+    float newY = enemy.y + enemy.dy * dt;
+    enemy.grounded = false;
+
+    int ex = (int)enemy.x;
+	int imaginaryJumps = 0; // Enemies don't have jumps, but checkVerticalCollision needs it
+
+    if (enemy.dy > 0) {
+        checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded, imaginaryJumps, true);
+    }
+    else if (enemy.dy < 0) {
+        checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded,imaginaryJumps, false);
+    }
+    else {
+        enemy.y = newY;;
+    }
 }
 
 void updatePhysics(float dt) {
@@ -418,7 +442,7 @@ void updatePhysics(float dt) {
     if (player.dy > 0){
 		checkVerticalCollision(player.y, player.dy,oldY, newY, px,player.grounded,player.jumps, true);
     } else if (player.dy < 0) {
-        checkVerticalCollision(player.y, player.dy, oldY, newY, px, player.grounded, player.jumps, true);
+        checkVerticalCollision(player.y, player.dy, oldY, newY, px, player.grounded, player.jumps, false);
     } else {
 		player.y = newY;;
     }
@@ -435,6 +459,10 @@ void updatePhysics(float dt) {
     if (player.y <= 1) {
         player.y = 1;
         player.dy = 0;
+    }
+
+    for (int i = 0; i < enemyCount; i++) {
+        updateEnemyPhysics(enemies[i], dt);
     }
 }
 
