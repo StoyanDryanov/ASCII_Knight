@@ -17,8 +17,8 @@ const float GRAVITY = 0.05f;
 const float JUMP_FORCE = -0.8f;
 const int MAX_JUMPS = 2;
 
-const float ATTACK_COOLDOWN = 0.5f;
-const float ATTACK_DURATION = 0.3f;
+const float ATTACK_COOLDOWN = 30.0f;
+const float ATTACK_DURATION = 15.0f;
 
 // ========== STRUCTS ==========
 enum AttackDirection {
@@ -284,6 +284,50 @@ void updatePhysics(float dt) {
 }
 
 // ========== RENDERING ==========
+void renderAttack() {
+    if (!player.currentAttack.active) return;
+
+	int px = (int)player.x;
+	int py = (int)player.y;
+
+	switch (player.currentAttack.direction) {   
+    case ATTACK_UP:
+        if (py > 1) {
+            gotoXY(px - 1, py - 1);
+            cout << "/-\\";
+        }
+		break;
+    case ATTACK_DOWN:
+        if (py < ARENA_HEIGHT - 2) {
+                gotoXY(px - 1, py + 1);
+                cout << "\\_/";
+            }
+		break;
+    case ATTACK_LEFT:
+        if (px > 2 && py > 1 && py < ARENA_HEIGHT - 2) {
+            gotoXY(px - 2, py - 1);
+            cout << "/";
+            gotoXY(px - 2, py);
+            cout << "|";
+            gotoXY(px - 2, py + 1);
+            cout << "\\";
+        }
+        break;
+    case ATTACK_RIGHT:
+        if (px < ARENA_WIDTH - 3 && py > 1 && py < ARENA_HEIGHT - 2) {
+            gotoXY(px + 2, py - 1);
+            cout << "\\";
+            gotoXY(px + 2, py);
+            cout << "|";
+            gotoXY(px + 2, py + 1);
+            cout << "/";
+        }
+		break;
+    default:
+		break;
+    }
+}
+
 void render() {
 	// ===== Draw HUD =====
     gotoXY(0, 0);
@@ -307,6 +351,8 @@ void render() {
     player.lastY = (int)player.y;
     gotoXY(player.lastX, player.lastY);
     cout << PLAYER_CHAR;
+
+	renderAttack();
 }
 
 // ========== MAIN LOOP ==========
