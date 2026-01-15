@@ -604,6 +604,6 @@ int main()
 		Sleep(16);
     }
 
-
+	delete[] enemies;
     return 0;
 }
