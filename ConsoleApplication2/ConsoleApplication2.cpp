@@ -31,7 +31,7 @@ enum AttackDirection {
 
 struct Attack {
 	AttackDirection direction;
-    float timer;
+	float timer; // countdown timer until ATTACK_DURATION reaches 0
     bool active;
 };
 
@@ -142,31 +142,74 @@ void initGame(){
 }
 
 // ========== INPUT HANDLING ==========
-void handleInput(float dt) {
-    if (_kbhit()) {
-        char key = _getch();
+void handleAttackInput(char key) {
+    if (player.attackCooldown > 0 || player.currentAttack.active)
+        return;
 
-        if (key == 'a' && player.x > 1) 
-            player.x -= PLAYER_SPEED * dt;
+	AttackDirection direction = ATTACK_NONE;
 
-        if (key == 'd' && player.x < ARENA_WIDTH - 2) 
-            player.x += PLAYER_SPEED * dt;
+    if (key == 'i') direction = ATTACK_UP;
+    else if (key == 'j') direction = ATTACK_LEFT;
+    else if (key == 'k') direction = ATTACK_DOWN;
+    else if (key == 'l') direction = ATTACK_RIGHT;
 
-        if (key == 'w') {
-            if (player.grounded) {
-                player.dy = JUMP_FORCE;
-                player.grounded = false;
-                player.jumps = 1;
-            }
-            else if (player.jumps < MAX_JUMPS) {
-                player.dy = JUMP_FORCE;
-                player.jumps++;
-            }
-        }
+	if (direction != ATTACK_NONE) {
+        player.currentAttack.active = true;
+        player.currentAttack.direction = direction;
+        player.currentAttack.timer = ATTACK_DURATION;
+		player.attackCooldown = ATTACK_COOLDOWN;
     }
 }
 
+void handleInput(float dt) {
+    if (!_kbhit()) return;
+
+    char key = _getch();
+
+    if (key == 'a' && player.x > 1) 
+        player.x -= PLAYER_SPEED * dt;
+
+    if (key == 'd' && player.x < ARENA_WIDTH - 2) 
+        player.x += PLAYER_SPEED * dt;
+
+    if (key == 'w') {
+        if (player.grounded) {
+            player.dy = JUMP_FORCE;
+            player.grounded = false;
+            player.jumps = 1;
+        }
+        else if (player.jumps < MAX_JUMPS) {
+            player.dy = JUMP_FORCE;
+            player.jumps++;
+        }
+    }
+    
+
+	handleAttackInput(key);// Handle attack input
+}
+
 // ========== PHYSICS ==========
+void updateAttackTimers(float dt) {
+	// Decrease attack cooldown timer
+    if (player.attackCooldown > 0) {
+		player.attackCooldown -= dt;
+
+        if (player.attackCooldown < 0) {
+			player.attackCooldown = 0;
+        }
+    }
+
+	// Decrease current attack display timer
+	if (player.currentAttack.active) {
+        player.currentAttack.timer -= dt;
+        if (player.currentAttack.timer <= 0) {
+            player.currentAttack.active = false;
+            player.currentAttack.direction = ATTACK_NONE;
+            player.currentAttack.timer = 0;
+		}
+    }
+}
+
 void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
     int startY = (int)oldY;
     int endY = (int)newY;
@@ -200,6 +243,8 @@ void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
 }
 
 void updatePhysics(float dt) {
+	updateAttackTimers(dt);
+
     // Apply gravity
     player.dy += GRAVITY * dt;
 
