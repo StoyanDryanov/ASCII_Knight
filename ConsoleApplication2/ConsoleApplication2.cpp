@@ -14,7 +14,7 @@ const char PLAYER_CHAR = '@';
 const char PLATFORM_CHAR = '=';
 const float PLAYER_SPEED = 0.5f;
 const float GRAVITY = 0.05f;
-const float JUMP_FORCE = -1.0f;
+const float JUMP_FORCE = -0.8f;
 const int MAX_JUMPS = 2;
 
 // ========== GLOBAL VARIABLES ==========
@@ -123,51 +123,77 @@ void updatePhysics(float dt) {
     // Apply gravity
     player.dy += GRAVITY * dt;
 
+    // Store old position BEFORE any updates
     float oldY = player.y;
-    player.y += player.dy * dt;
+
+    // Apply vertical velocity
+    float newY = player.y + player.dy * dt;
 
     player.grounded = false;
 
     int px = (int)player.x;
-    int py = (int)player.y;
 
-    // ===== Platform collision when falling =====
-    if (player.dy > 0) {
-        int belowY = py + 1;
+    // ===== CHECK ALL CELLS BETWEEN OLD AND NEW POSITION =====
 
-        if (belowY >= 0 && belowY < ARENA_HEIGHT &&
-            px >= 0 && px < ARENA_WIDTH) {
+    if (player.dy > 0) {  // Falling down
+        int startY = (int)oldY;
+        int endY = (int)newY;
 
-            if (arena[belowY][px] == PLATFORM_CHAR &&
-                oldY <= belowY - 1) {
+        bool collided = false;
 
-                player.y = (float)(belowY - 1);
-                player.dy = 0;
-                player.grounded = true;
-                player.jumps = 0;
+        // Check each cell we're passing through while falling
+        for (int checkY = startY + 1; checkY <= endY; checkY++) {
+            if (checkY > 0 && checkY < ARENA_HEIGHT &&
+                px > 0 && px < ARENA_WIDTH - 1) {
+
+                if (arena[checkY][px] == PLATFORM_CHAR || arena[checkY][px] == WALL_CHAR) {
+                    // Land on top of the platform
+                    player.y = (float)(checkY - 1);
+                    player.dy = 0;
+                    player.grounded = true;
+                    player.jumps = 0;
+                    collided = true;
+                    break;
+                }
             }
+        }
+
+        if (!collided) {
+            player.y = newY;
         }
     }
-    // ===== Platform collision when jumping =====
-    if (player.dy < 0) {
-        int aboveY = py; 
+    else if (player.dy < 0) {  // Jumping up
+        int startY = (int)oldY;
+        int endY = (int)newY;
 
-        if (aboveY >= 0 && aboveY < ARENA_HEIGHT &&
-            px >= 0 && px < ARENA_WIDTH) {
+        bool collided = false;
 
-            // Check if hitting a platform or wall from BELOW
-            if ((arena[aboveY][px] == PLATFORM_CHAR || arena[aboveY][px] == WALL_CHAR) &&
-                oldY >= (float)(aboveY + 1)) {
+		// Check each cell we're passing through while jumping
+        for (int checkY = startY; checkY >= endY; checkY--) {
+            if (checkY >= 0 && checkY < ARENA_HEIGHT &&
+                px > 0 && px < ARENA_WIDTH - 1) {
 
-                player.y = (float)(aboveY + 1); 
-                player.dy = 0;                  
+                if (arena[checkY][px] == PLATFORM_CHAR || arena[checkY][px] == WALL_CHAR) {
+                    // Stop below the platform
+                    player.y = (float)(checkY + 1);
+                    player.dy = 0;
+                    collided = true;
+                    break;
+                }
             }
         }
+
+        if (!collided) {
+            player.y = newY;
+        }
+    }
+    else {  // Not moving vertically
+        player.y = newY;
     }
 
     // ===== Floor collision =====
     if (player.y >= ARENA_HEIGHT - 2) {
-        player.y = (float)ARENA_HEIGHT - 2;
+        player.y = (float)(ARENA_HEIGHT - 2);
         player.dy = 0;
         player.grounded = true;
         player.jumps = 0;
