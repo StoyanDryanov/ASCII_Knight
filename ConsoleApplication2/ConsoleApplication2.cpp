@@ -421,6 +421,55 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
     }
 }
 
+void updateWalkerAI(Enemy& enemy, float dt) {
+    if(!enemy.grounded) return;
+
+	float newX = enemy.x + enemy.dx * enemy.direction * dt;
+	int checkX = (int)newX;
+	int checkY = (int)enemy.y;
+
+    if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX]))
+    {
+		enemy.direction *= -1; // Reverse direction
+        return;
+    }
+
+	int groundCheckY = checkY + 1;
+
+    if (groundCheckY < ARENA_HEIGHT && !isCollisionTile(arena[groundCheckY][checkX])) {
+		enemy.direction *= -1; // Reverse direction
+        return;
+    }
+
+	enemy.x = newX;
+}
+
+void updateEnemyAI(float dt) {
+    for (int i = 0; i < enemyCount; i++)
+    {
+		Enemy& enemy = enemies[i];
+        if (!enemy.active) 
+            continue;
+
+        switch (enemy.type)
+        {
+            case ENEMY_WALKER:
+                updateWalkerAI(enemy, dt);
+			    break;
+            case ENEMY_JUMPER:
+                break;
+            case ENEMY_FLIER:
+                break;
+            case ENEMY_CRAWLER:
+                break;
+            case ENEMY_BOSS:
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 void updatePhysics(float dt) {
 	updateAttackTimers(dt);
 
@@ -464,6 +513,8 @@ void updatePhysics(float dt) {
     for (int i = 0; i < enemyCount; i++) {
         updateEnemyPhysics(enemies[i], dt);
     }
+
+    updateEnemyAI(dt);
 }
 
 // ========== RENDERING ==========
