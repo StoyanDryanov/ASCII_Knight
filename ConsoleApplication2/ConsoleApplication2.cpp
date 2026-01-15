@@ -17,7 +17,24 @@ const float GRAVITY = 0.05f;
 const float JUMP_FORCE = -0.8f;
 const int MAX_JUMPS = 2;
 
+const float ATTACK_COOLDOWN = 0.5f;
+const float ATTACK_DURATION = 0.3f;
+
 // ========== STRUCTS ==========
+enum AttackDirection {
+	ATTACK_NONE = 0,
+	ATTACK_UP,
+	ATTACK_DOWN,
+	ATTACK_LEFT,
+	ATTACK_RIGHT
+};
+
+struct Attack {
+	AttackDirection direction;
+    float timer;
+    bool active;
+};
+
 struct Player {
     float x, y;
     float dy;
@@ -25,7 +42,11 @@ struct Player {
     int jumps;
     bool grounded;
     int lastX, lastY;
+	float attackCooldown;
+	Attack currentAttack;
 };
+
+
 
 // ========== GLOBAL VARIABLES ==========
 Player player;
@@ -102,6 +123,10 @@ void initPlayer(){
     player.grounded = false;
     player.lastX = (int)player.x;
     player.lastY = (int)player.y;
+	player.attackCooldown = 0;
+	player.currentAttack.active = false;
+	player.currentAttack.direction = ATTACK_NONE;
+	player.currentAttack.timer = 0;
 }
 
 void initGame(){
