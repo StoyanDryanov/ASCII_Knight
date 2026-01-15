@@ -20,7 +20,18 @@ const int MAX_JUMPS = 2;
 const float ATTACK_COOLDOWN = 30.0f;
 const float ATTACK_DURATION = 15.0f;
 
+const char ENEMY_WALKER_CHAR = 'E';
+const float ENEMY_WALKER_SPEED = 0.2f;
+
 // ========== STRUCTS ==========
+enum EnemyType {
+    ENEMY_WALKER,
+    ENEMY_JUMPER,
+    ENEMY_FLIER,
+    ENEMY_CRAWLER,
+    ENEMY_BOSS
+};
+
 enum AttackDirection {
 	ATTACK_NONE = 0,
 	ATTACK_UP,
@@ -51,12 +62,24 @@ struct Player {
 	Attack currentAttack;
 };
 
-
+struct Enemy {
+    EnemyType type;
+    float x, y;
+    float dx, dy;
+    bool grounded;
+    bool active;
+    int lastX, lastY;
+	int direction; // 1 = right, -1 = left
+};
 
 // ========== GLOBAL VARIABLES ==========
 Player player;
 clock_t lastTime;
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
+
+Enemy* enemies = nullptr;
+int maxEnemies = 0;
+int enemyCount = 0;
 
 // ========== FUTILITY FUNCTIONS ==========
 void gotoXY(int x, int y){
@@ -76,6 +99,123 @@ bool isCollisionTile(char tile) {
 
 bool isInBounds(int x, int y) {
     return x > 0 && x < ARENA_WIDTH - 1 && y > 0 && y < ARENA_HEIGHT;
+}
+
+// ========== ENEMY MANAGMENT ==========
+void spawnEnemy(EnemyType type, float x, float y) {
+    if (enemyCount >= maxEnemies) {
+        int newMax = maxEnemies * 2;
+        Enemy* newEnemies = new Enemy[newMax];
+
+        for (int i = 0; i < enemyCount; i++) {
+            newEnemies[i] = enemies[i];
+        }
+
+        delete[] enemies;
+        enemies = newEnemies;
+        maxEnemies = newMax;
+    }
+
+    Enemy& enemy = enemies[enemyCount];
+	enemy.type = type;
+    enemy.x = x;
+    enemy.y = y;
+    enemy.dy = 0;
+    enemy.grounded = false;
+    enemy.active = true;
+    enemy.direction = 1;
+    enemy.lastX = (int)x;
+    enemy.lastY = (int)y;
+
+    switch (type) {
+    case ENEMY_WALKER:
+        enemy.dx = ENEMY_WALKER_SPEED;
+        enemy.direction = 1;  // Start moving right
+        break;
+    case ENEMY_JUMPER:
+        enemy.dx = 0;
+        enemy.direction = 1;
+        break;
+    case ENEMY_FLIER:
+        enemy.dx = 0;
+        enemy.direction = 1;
+        break;
+    case ENEMY_CRAWLER:
+        enemy.dx = 0;
+        enemy.direction = 1;
+        break;
+    case ENEMY_BOSS:
+        enemy.dx = 0;
+        enemy.direction = 1;
+        break;
+    }
+
+    enemyCount++;
+}
+
+void spawnWave(int waveNumber) {
+    //spawn walkers
+    int numWalkers = 2 + waveNumber;
+
+    for (int i = 0; i < numWalkers; i++) {
+        float x, y;
+        int attempts = 0;
+        bool validSpot = false;
+
+        // Try to find a safe spawn position
+        while (!validSpot && attempts < 100) {
+            x = (float)(rand() % (ARENA_WIDTH - 4) + 2);
+            y = (float)(rand() % (ARENA_HEIGHT - 4) + 2);
+
+            int ix = (int)x;
+            int iy = (int)y;
+
+            // Check if spot is empty
+            if (arena[iy][ix] != ' ') {
+                attempts++;
+                continue;
+            }
+
+            // Check if too close to player
+            float dx = x - player.x;
+            float dy = y - player.y;
+
+            float distSq = dx * dx + dy * dy;
+
+            if (distSq < 25.0f) {  // 5 * 5
+                attempts++;
+                continue;
+            }
+
+            // Check if too close to other enemies
+            bool tooClose = false;
+            for (int j = 0; j < enemyCount; j++) {
+                if (!enemies[j].active) continue;
+
+                float edx = x - enemies[j].x;
+                float edy = y - enemies[j].y;
+
+                float edistSq = edx * edx + edy * edy;
+
+                if (edistSq < 9.0f) {  // 3 * 3
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (!tooClose) {
+                validSpot = true;
+            }
+            else {
+                attempts++;
+            }
+        }
+
+        // If we found a valid spot, spawn the enemy
+        if (validSpot) {
+            spawnEnemy(ENEMY_WALKER, x, y);
+        }
+    }
 }
 
 // ========== INITIALIZATION ==========
@@ -146,6 +286,12 @@ void initGame(){
 	generatePlatforms();
 	drawArena();
 	initPlayer();
+	
+	maxEnemies = 10;
+    enemies = new Enemy[maxEnemies];
+	enemyCount = 0;
+
+	spawnWave(1);
 
     lastTime = clock();
 }
@@ -293,6 +439,41 @@ void updatePhysics(float dt) {
 }
 
 // ========== RENDERING ==========
+void renderEnemies() {
+    for (int i = 0; i < enemyCount; i++) {
+        Enemy& enemy = enemies[i];
+        if (!enemy.active) continue;
+
+        gotoXY(enemy.lastX, enemy.lastY);
+        cout << ' ';
+
+        enemy.lastX = (int)enemy.x;
+        enemy.lastY = (int)enemy.y;
+        gotoXY(enemy.lastX, enemy.lastY);
+
+        switch (enemy.type) {
+        case ENEMY_WALKER:
+            cout << ENEMY_WALKER_CHAR;
+            break;
+        case ENEMY_JUMPER:
+            cout << 'J';
+            break;
+        case ENEMY_FLIER:
+            cout << 'F';
+            break;
+        case ENEMY_CRAWLER:
+            cout << 'C';
+            break;
+        case ENEMY_BOSS:
+            cout << 'B';
+            break;
+        default:
+            cout << 'X';
+            break;
+        }
+    }
+}
+
 // restores the background characters that were saved before drawing the attack
 void clearAttack() {
     // loop through all saved characters and restore them to their original positions
@@ -390,6 +571,8 @@ void render() {
     }
     cout << topBorder;
 
+    renderEnemies();
+
 	// ===== Draw Player =====
 	// Erase last position
     gotoXY(player.lastX, player.lastY);
@@ -420,6 +603,7 @@ int main()
 
 		Sleep(16);
     }
+
 
     return 0;
 }
