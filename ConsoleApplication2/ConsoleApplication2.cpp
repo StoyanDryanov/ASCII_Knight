@@ -365,7 +365,7 @@ void updateAttackTimers(float dt) {
     }
 }
 
-void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
+void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x,bool& grounded, int& jumps, bool isFalling) {
     int startY = (int)oldY;
     int endY = (int)newY;
 
@@ -373,11 +373,11 @@ void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
     if (isFalling) {// Falling down
         // Check each cell we're passing through while falling
         for (int checkY = startY + 1; checkY <= endY; checkY++) {
-            if (isInBounds(px, checkY) && isCollisionTile(arena[checkY][px])) {
-                player.y = (float)(checkY - 1);
-                player.dy = 0;
-                player.grounded = true;
-                player.jumps = 0;
+            if (isInBounds(x, checkY) && isCollisionTile(arena[checkY][x])) {
+                y = (float)(checkY - 1);
+                dy = 0;
+                grounded = true;
+                jumps = 0;
                 return;
             }
         }
@@ -385,9 +385,9 @@ void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
 	else {// Jumping up
 		// Check each cell we're passing through while jumping
         for (int checkY = startY; checkY >= endY; checkY--) {
-            if (isInBounds(px, checkY) && isCollisionTile(arena[checkY][px])) {
-                player.y = (float)(checkY + 1);
-                player.dy = 0;
+            if (isInBounds(x, checkY) && isCollisionTile(arena[checkY][x])) {
+                y = (float)(checkY + 1);
+                dy = 0;
                 return;
             }
         }
@@ -416,9 +416,9 @@ void updatePhysics(float dt) {
 
     
     if (player.dy > 0){
-		checkVerticalCollision(oldY, newY, px, true);
+		checkVerticalCollision(player.y, player.dy,oldY, newY, px,player.grounded,player.jumps, true);
     } else if (player.dy < 0) {
-		checkVerticalCollision(oldY, newY, px, false);
+        checkVerticalCollision(player.y, player.dy, oldY, newY, px, player.grounded, player.jumps, true);
     } else {
 		player.y = newY;;
     }
