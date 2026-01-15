@@ -344,6 +344,67 @@ void handleInput(float dt) {
 }
 
 // ========== PHYSICS ==========
+void checkAttackCollision() {
+    if (!player.currentAttack.active)
+        return;
+
+	int px = (int)player.x;
+	int py = (int)player.y;
+
+
+	// Determine attack hit positions based on direction
+    int hitX[3], hitY[3];
+	int hitCount = 0;
+
+    switch (player.currentAttack.direction) {
+        case ATTACK_UP:
+            hitX[0] = px - 1; hitY[0] = py - 1;
+            hitX[1] = px;     hitY[1] = py - 1;
+            hitX[2] = px + 1; hitY[2] = py - 1;
+            hitCount = 3;
+			break;
+        case ATTACK_DOWN:
+            hitX[0] = px - 1; hitY[0] = py + 1;
+            hitX[1] = px;     hitY[1] = py + 1;
+            hitX[2] = px + 1; hitY[2] = py + 1;
+			hitCount = 3;
+            break;
+        case ATTACK_LEFT:
+            hitX[0] = px - 1; hitY[0] = py - 1;
+            hitX[1] = px - 1; hitY[1] = py;
+			hitX[2] = px - 1; hitY[2] = py + 1;
+			hitCount = 3;
+            break;
+        case ATTACK_RIGHT:
+            hitX[0] = px + 1; hitY[0] = py - 1;
+			hitX[1] = px + 1; hitY[1] = py;
+			hitX[2] = px + 1; hitY[2] = py + 1;
+            hitCount = 3;
+			break;
+        default:
+            return;
+    }
+
+    for (int i = 0; i < enemyCount; i++){
+		Enemy& enemy = enemies[i];
+        if (!enemy.active)
+            continue;
+
+		int ex = (int)enemy.x;
+		int ey = (int)enemy.y;
+
+        for (int h = 0; h < hitCount; h++){
+            if (ex == hitX[h] && ey == hitY[h]){
+				enemy.active = false; // Enemy is hit and deactivated
+
+				gotoXY(enemy.lastX, enemy.lastY);
+                cout << ' ';
+                break;
+            }
+        }
+    }
+}
+
 void updateAttackTimers(float dt) {
 	// Decrease attack cooldown timer
     if (player.attackCooldown > 0) {
@@ -472,6 +533,8 @@ void updateEnemyAI(float dt) {
 
 void updatePhysics(float dt) {
 	updateAttackTimers(dt);
+
+	checkAttackCollision();
 
     // Apply gravity
     player.dy += GRAVITY * dt;
