@@ -35,6 +35,9 @@ struct Attack {
     bool active;
 	int lastX, lastY; // track last position to clear
 	AttackDirection lastDirection; // track last direction to clear
+	char savedChars[3]; // characters that was overwritten by the attack display
+	int savedPositions[3][2]; // positions of the overwritten characters
+	int numSavedChars; // number of characters saved
 };
 
 struct Player {
@@ -132,6 +135,7 @@ void initPlayer(){
 	player.currentAttack.lastX = -1;
 	player.currentAttack.lastY = -1;
 	player.currentAttack.lastDirection = ATTACK_NONE;
+	player.currentAttack.numSavedChars = 0;
 }
 
 void initGame(){
@@ -289,52 +293,52 @@ void updatePhysics(float dt) {
 }
 
 // ========== RENDERING ==========
-void clearAttack(int px, int py, AttackDirection direction) {
-    switch (direction){
-        case ATTACK_UP:
-            if (py > 1) {
-				gotoXY(px - 1, py - 1);
-				cout << "   "; // clearing 3 chars for the attack
-            }
-			break;
-        case ATTACK_DOWN:
-			if (py < ARENA_HEIGHT - 2) {
-				gotoXY(px - 1, py + 1);
-				cout << "   "; // clearing 3 chars for the attack
-            }
-            break;
-        case ATTACK_LEFT:
-			if (px > 2 && py > 1 && py < ARENA_HEIGHT - 2) {
-				gotoXY(px - 2, py - 1);
-                cout << " ";
-				gotoXY(px - 2, py);
-                cout << " ";
-				gotoXY(px - 2, py + 1);
-                cout << " ";
-            }
-            break;
-        case ATTACK_RIGHT:
-			if (px < ARENA_WIDTH - 3 && py > 1 && py < ARENA_HEIGHT - 2) {
-				gotoXY(px + 2, py - 1);
-				cout << " ";
-				gotoXY(px + 2, py);
-				cout << " ";
-				gotoXY(px + 2, py + 1);
-				cout << " ";
-            }
-			break;
-		default:
-            break;
+// restores the background characters that were saved before drawing the attack
+void clearAttack() {
+    // loop through all saved characters and restore them to their original positions
+    for (int i = 0; i < player.currentAttack.numSavedChars; i++) {
+        int x = player.currentAttack.savedPositions[i][0];
+        int y = player.currentAttack.savedPositions[i][1];
+
+        gotoXY(x, y);
+        cout << player.currentAttack.savedChars[i];// print the original character
     }
+	player.currentAttack.numSavedChars = 0; // reset the count
+}
+
+// saves the background characters before drawing attack, then draws the attack
+void saveAndDrawAttack(int x, int y, const char* str, int len) {
+    // save each character that will be overwritten by the attack animation
+    for (int i = 0; i < len; i++) {
+        if (x + i >= 0 && x + i < ARENA_WIDTH && y >= 0 && y < ARENA_HEIGHT) {
+            int idx = player.currentAttack.numSavedChars;
+			if (idx < 3) { // ensure we don't exceed the array bounds
+				// save the character
+                player.currentAttack.savedChars[idx] = arena[y][x + i];
+				// save the position of the character
+                player.currentAttack.savedPositions[idx][0] = x + i;
+                player.currentAttack.savedPositions[idx][1] = y;
+                player.currentAttack.numSavedChars++;
+            }
+        }
+    }
+
+	// draw the attack over the saved characters
+    gotoXY(x, y);
+    cout << str;
 }
 
 void renderAttack() {
-    
+	// clear previous attack display if needed
     if (player.currentAttack.lastDirection != ATTACK_NONE) {
-		clearAttack(player.currentAttack.lastX,
-                    player.currentAttack.lastY,
-                    player.currentAttack.lastDirection);
-		player.currentAttack.lastDirection = ATTACK_NONE;
+        // clear if player moved OR if attack is no longer active
+        bool playerMoved = (player.currentAttack.lastX != (int)player.x ||
+                            player.currentAttack.lastY != (int)player.y);
+        if (!player.currentAttack.active || playerMoved)
+        {
+			clearAttack(); // restore background
+            player.currentAttack.lastDirection = ATTACK_NONE;
+        }
     }
 	
     if (!player.currentAttack.active) return;
@@ -342,45 +346,33 @@ void renderAttack() {
 	int px = (int)player.x;
 	int py = (int)player.y;
 
+	// save current position and direction for next frame
     player.currentAttack.lastX = px;
     player.currentAttack.lastY = py;
 	player.currentAttack.lastDirection = player.currentAttack.direction;
 
-	switch (player.currentAttack.direction) {   
+	//reset saved characters count
+	player.currentAttack.numSavedChars = 0;
+
+    switch (player.currentAttack.direction) {
     case ATTACK_UP:
-        if (py > 1) {
-            gotoXY(px - 1, py - 1);
-            cout << "/-\\";
-        }
-		break;
+        saveAndDrawAttack(px - 1, py - 1, "/-\\", 3);
+        break;
     case ATTACK_DOWN:
-        if (py < ARENA_HEIGHT - 2) {
-                gotoXY(px - 1, py + 1);
-                cout << "\\_/";
-            }
-		break;
+        saveAndDrawAttack(px - 1, py + 1, "\\_/", 3);
+        break;
     case ATTACK_LEFT:
-        if (px > 2 && py > 1 && py < ARENA_HEIGHT - 2) {
-            gotoXY(px - 2, py - 1);
-            cout << "/";
-            gotoXY(px - 2, py);
-            cout << "|";
-            gotoXY(px - 2, py + 1);
-            cout << "\\";
-        }
+        saveAndDrawAttack(px - 1, py - 1, "/", 1);
+        saveAndDrawAttack(px - 1, py, "|", 1);
+        saveAndDrawAttack(px - 1, py + 1, "\\", 1);
         break;
     case ATTACK_RIGHT:
-        if (px < ARENA_WIDTH - 3 && py > 1 && py < ARENA_HEIGHT - 2) {
-            gotoXY(px + 2, py - 1);
-            cout << "\\";
-            gotoXY(px + 2, py);
-            cout << "|";
-            gotoXY(px + 2, py + 1);
-            cout << "/";
-        }
-		break;
+        saveAndDrawAttack(px + 1, py - 1, "\\", 1);
+        saveAndDrawAttack(px + 1, py, "|", 1);
+        saveAndDrawAttack(px + 1, py + 1, "/", 1);
+        break;
     default:
-		break;
+        break;
     }
 }
 
