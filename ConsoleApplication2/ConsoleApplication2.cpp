@@ -25,6 +25,12 @@ const float DAMAGE_COOLDOWN = 60.0f;
 const char ENEMY_WALKER_CHAR = 'E';
 const float ENEMY_WALKER_SPEED = 0.2f;
 
+const char ENEMY_JUMPER_CHAR = 'J';
+const float ENEMY_JUMPER_SPEED = 0.2f;
+const float ENEMY_JUMPER_JUMP_FORCE = -1.0f;
+const float ENEMY_JUMPER_DETECTION_RANGE = 10.0f;
+const float ENEMY_JUMPER_JUMP_COOLDOWN = 90.0f;
+
 // ========== STRUCTS ==========
 enum EnemyType {
     ENEMY_WALKER,
@@ -73,6 +79,7 @@ struct Enemy {
     bool active;
     int lastX, lastY;
 	int direction; // 1 = right, -1 = left
+	float jumpCooldown;
 };
 
 // ========== GLOBAL VARIABLES ==========
@@ -126,9 +133,9 @@ void spawnEnemy(EnemyType type, float x, float y) {
     enemy.dy = 0;
     enemy.grounded = false;
     enemy.active = true;
-    enemy.direction = 1;
     enemy.lastX = (int)x;
     enemy.lastY = (int)y;
+    enemy.jumpCooldown = 0;
 
     switch (type) {
     case ENEMY_WALKER:
@@ -136,7 +143,7 @@ void spawnEnemy(EnemyType type, float x, float y) {
         enemy.direction = 1;  // Start moving right
         break;
     case ENEMY_JUMPER:
-        enemy.dx = 0;
+        enemy.dx = ENEMY_JUMPER_SPEED;
         enemy.direction = 1;
         break;
     case ENEMY_FLIER:
@@ -156,68 +163,79 @@ void spawnEnemy(EnemyType type, float x, float y) {
     enemyCount++;
 }
 
+bool findValidSpawnPosition(float& x, float&y) {
+	int attempts = 0;
+
+    while (attempts < 100)
+    {
+		x = (float)(rand() % (ARENA_WIDTH - 4) + 2);
+		y = (float)(rand() % (ARENA_HEIGHT - 4) + 2);
+
+		int ix = (int)x;
+		int iy = (int)y;
+
+		// Check if spot is empty
+        if (arena[iy][ix] != ' ') {
+			attempts++;
+            continue;
+        }
+
+		// Check if too close to player
+        float dx = x - player.x;
+        float dy = y - player.y;
+        float distSq = dx * dx + dy * dy;
+
+        if (distSq < 25.0f) {  // 5 * 5
+            attempts++;
+            continue;
+		}
+
+        // Check if too close to other enemies
+        bool tooClose = false;
+        for (int j = 0; j < enemyCount; j++) {
+            if (!enemies[j].active) 
+                continue;
+
+            float edx = x - enemies[j].x;
+            float edy = y - enemies[j].y;
+            float edistSq = edx * edx + edy * edy;
+
+            if (edistSq < 9.0f) {  // 3 * 3
+                tooClose = true;
+                break;
+            }
+        }
+        if (!tooClose) {
+            return true; // Found a valid spot
+        }
+        else {
+            attempts++;
+		}
+    }
+
+	return false; // Failed to find a valid spot
+}
+
 void spawnWave(int waveNumber) {
-    //spawn walkers
     int numWalkers = 2 + waveNumber;
+	int numJumpers = 2 + waveNumber;
 
-    for (int i = 0; i < numWalkers; i++) {
-        float x, y;
-        int attempts = 0;
-        bool validSpot = false;
+    for (int i = 0; i < numWalkers; i++)
+    {
+		float x, y;
 
-        // Try to find a safe spawn position
-        while (!validSpot && attempts < 100) {
-            x = (float)(rand() % (ARENA_WIDTH - 4) + 2);
-            y = (float)(rand() % (ARENA_HEIGHT - 4) + 2);
-
-            int ix = (int)x;
-            int iy = (int)y;
-
-            // Check if spot is empty
-            if (arena[iy][ix] != ' ') {
-                attempts++;
-                continue;
-            }
-
-            // Check if too close to player
-            float dx = x - player.x;
-            float dy = y - player.y;
-
-            float distSq = dx * dx + dy * dy;
-
-            if (distSq < 25.0f) {  // 5 * 5
-                attempts++;
-                continue;
-            }
-
-            // Check if too close to other enemies
-            bool tooClose = false;
-            for (int j = 0; j < enemyCount; j++) {
-                if (!enemies[j].active) continue;
-
-                float edx = x - enemies[j].x;
-                float edy = y - enemies[j].y;
-
-                float edistSq = edx * edx + edy * edy;
-
-                if (edistSq < 9.0f) {  // 3 * 3
-                    tooClose = true;
-                    break;
-                }
-            }
-
-            if (!tooClose) {
-                validSpot = true;
-            }
-            else {
-                attempts++;
-            }
-        }
-
-        // If we found a valid spot, spawn the enemy
-        if (validSpot) {
+        if (findValidSpawnPosition(x, y)) {
             spawnEnemy(ENEMY_WALKER, x, y);
-        }
+		}
+    }
+
+    for (int i = 0; i < numJumpers; i++)
+	{
+        float x, y;
+
+        if (findValidSpawnPosition(x, y)) {
+            spawnEnemy(ENEMY_JUMPER, x, y);
+		}
     }
 }
 
@@ -516,6 +534,19 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
     else {
         enemy.y = newY;;
     }
+
+    // floor collision for enemies
+    if (enemy.y >= ARENA_HEIGHT - 2) {
+        enemy.y = (float)(ARENA_HEIGHT - 2);
+        enemy.dy = 0;
+        enemy.grounded = true;
+    }
+
+    // ceiling collision for enemies
+    if (enemy.y <= 1) {
+        enemy.y = 1;
+        enemy.dy = 0;
+    }
 }
 
 void updateWalkerAI(Enemy& enemy, float dt) {
@@ -541,6 +572,35 @@ void updateWalkerAI(Enemy& enemy, float dt) {
 	enemy.x = newX;
 }
 
+void updateJumperAI(Enemy& enemy, float dt) {
+    if (enemy.jumpCooldown > 0){
+		enemy.jumpCooldown -= dt;
+        if (enemy.jumpCooldown < 0)
+            enemy.jumpCooldown = 0;
+    }
+
+	float dx = player.x - enemy.x;
+	float dy = player.y - enemy.y;
+	float distance = sqrtf(dx * dx + dy * dy);
+
+	float newX = enemy.x + enemy.dx * enemy.direction * dt;
+	int checkX = (int)newX;
+	int checkY = (int)enemy.y;
+
+    if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX]))
+    {
+        enemy.direction *= -1; // Reverse direction
+	} else {
+		enemy.x = newX;
+    }
+
+    if (enemy.grounded && distance <= ENEMY_JUMPER_DETECTION_RANGE && enemy.jumpCooldown <= 0) {
+        enemy.dy = ENEMY_JUMPER_JUMP_FORCE;
+		enemy.grounded = false;
+		enemy.jumpCooldown = ENEMY_JUMPER_JUMP_COOLDOWN;
+    }
+}
+
 void updateEnemyAI(float dt) {
     for (int i = 0; i < enemyCount; i++)
     {
@@ -554,6 +614,7 @@ void updateEnemyAI(float dt) {
                 updateWalkerAI(enemy, dt);
 			    break;
             case ENEMY_JUMPER:
+				updateJumperAI(enemy, dt);
                 break;
             case ENEMY_FLIER:
                 break;
@@ -635,7 +696,7 @@ void renderEnemies() {
             cout << ENEMY_WALKER_CHAR;
             break;
         case ENEMY_JUMPER:
-            cout << 'J';
+            cout << ENEMY_JUMPER_CHAR;
             break;
         case ENEMY_FLIER:
             cout << 'F';
