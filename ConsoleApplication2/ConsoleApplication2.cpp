@@ -33,6 +33,8 @@ struct Attack {
 	AttackDirection direction;
 	float timer; // countdown timer until ATTACK_DURATION reaches 0
     bool active;
+	int lastX, lastY; // track last position to clear
+	AttackDirection lastDirection; // track last direction to clear
 };
 
 struct Player {
@@ -127,6 +129,9 @@ void initPlayer(){
 	player.currentAttack.active = false;
 	player.currentAttack.direction = ATTACK_NONE;
 	player.currentAttack.timer = 0;
+	player.currentAttack.lastX = -1;
+	player.currentAttack.lastY = -1;
+	player.currentAttack.lastDirection = ATTACK_NONE;
 }
 
 void initGame(){
@@ -166,7 +171,7 @@ void handleInput(float dt) {
 
     char key = _getch();
 
-    if (key == 'a' && player.x > 1) 
+    if (key == 'a' && player.x > 2) 
         player.x -= PLAYER_SPEED * dt;
 
     if (key == 'd' && player.x < ARENA_WIDTH - 2) 
@@ -284,11 +289,62 @@ void updatePhysics(float dt) {
 }
 
 // ========== RENDERING ==========
+void clearAttack(int px, int py, AttackDirection direction) {
+    switch (direction){
+        case ATTACK_UP:
+            if (py > 1) {
+				gotoXY(px - 1, py - 1);
+				cout << "   "; // clearing 3 chars for the attack
+            }
+			break;
+        case ATTACK_DOWN:
+			if (py < ARENA_HEIGHT - 2) {
+				gotoXY(px - 1, py + 1);
+				cout << "   "; // clearing 3 chars for the attack
+            }
+            break;
+        case ATTACK_LEFT:
+			if (px > 2 && py > 1 && py < ARENA_HEIGHT - 2) {
+				gotoXY(px - 2, py - 1);
+                cout << " ";
+				gotoXY(px - 2, py);
+                cout << " ";
+				gotoXY(px - 2, py + 1);
+                cout << " ";
+            }
+            break;
+        case ATTACK_RIGHT:
+			if (px < ARENA_WIDTH - 3 && py > 1 && py < ARENA_HEIGHT - 2) {
+				gotoXY(px + 2, py - 1);
+				cout << " ";
+				gotoXY(px + 2, py);
+				cout << " ";
+				gotoXY(px + 2, py + 1);
+				cout << " ";
+            }
+			break;
+		default:
+            break;
+    }
+}
+
 void renderAttack() {
+    
+    if (player.currentAttack.lastDirection != ATTACK_NONE) {
+		clearAttack(player.currentAttack.lastX,
+                    player.currentAttack.lastY,
+                    player.currentAttack.lastDirection);
+		player.currentAttack.lastDirection = ATTACK_NONE;
+    }
+	
     if (!player.currentAttack.active) return;
 
 	int px = (int)player.x;
 	int py = (int)player.y;
+
+    player.currentAttack.lastX = px;
+    player.currentAttack.lastY = py;
+	player.currentAttack.lastDirection = player.currentAttack.direction;
 
 	switch (player.currentAttack.direction) {   
     case ATTACK_UP:
