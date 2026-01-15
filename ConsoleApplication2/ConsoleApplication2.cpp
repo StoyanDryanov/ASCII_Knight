@@ -17,7 +17,7 @@ const float GRAVITY = 0.05f;
 const float JUMP_FORCE = -0.8f;
 const int MAX_JUMPS = 2;
 
-// ========== GLOBAL VARIABLES ==========
+// ========== STRUCTS ==========
 struct Player {
     float x, y;
     float dy;
@@ -27,20 +27,12 @@ struct Player {
     int lastX, lastY;
 };
 
-Player player = { 
-    ARENA_WIDTH / 2.0f,
-    ARENA_HEIGHT / 2.0f,
-    0,
-    5,
-    false,
-    (int)(ARENA_WIDTH / 2),
-    (int)(ARENA_HEIGHT / 2),
-    };
-
+// ========== GLOBAL VARIABLES ==========
+Player player;
 clock_t lastTime;
-
 char arena[ARENA_HEIGHT][ARENA_WIDTH];
 
+// ========== FUTILITY FUNCTIONS ==========
 void gotoXY(int x, int y){
     COORD coord = {(SHORT)x, (SHORT)y};
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
@@ -52,10 +44,16 @@ void hideCursor() {
     SetConsoleCursorInfo(consoleHandle, &info);
 }
 
-void initGame(){
-	hideCursor();
-    srand((unsigned int)time(NULL)); // Seed RNG for different platforms each run
+bool isCollisionTile(char tile) {
+    return tile == PLATFORM_CHAR || tile == WALL_CHAR;
+}
 
+bool isInBounds(int x, int y) {
+    return x > 0 && x < ARENA_WIDTH - 1 && y > 0 && y < ARENA_HEIGHT;
+}
+
+// ========== INITIALIZATION ==========
+void initArena() {
     for (int y = 0; y < ARENA_HEIGHT; y++) {
         for (int x = 0; x < ARENA_WIDTH; x++) {
             if (y == 0 || y == ARENA_HEIGHT - 1 || x == 0 || x == ARENA_WIDTH - 1)
@@ -64,46 +62,70 @@ void initGame(){
                 arena[y][x] = ' ';
         }
     }
+}
 
+void generatePlatforms() {
     for (int i = 0; i < 4; i++) {
         int pWidth = rand() % 10 + 10; // Width between 10 and 20
         int pX, pY;
-
         if (i < 2) { // Two on the left side
             pX = rand() % 15 + 5;
         }
         else {     // Two on the right side
             pX = rand() % 15 + 50;
         }
-
         // Space them out vertically
         pY = (i % 2 == 0) ? (ARENA_HEIGHT * 0.35) : (ARENA_HEIGHT * 0.65);
         pY += (rand() % 3 - 1); // Add a small random height offset
-
         for (int x = 0; x < pWidth; x++) {
             if (pX + x < ARENA_WIDTH - 1)
                 arena[pY][pX + x] = PLATFORM_CHAR;
         }
     }
+}
 
+void drawArena() {
     for (int y = 0; y < ARENA_HEIGHT; y++) {
         for (int x = 0; x < ARENA_WIDTH; x++) {
             cout << arena[y][x];
         }
         cout << endl;
     }
+}
 
+void initPlayer(){
+    player.x = ARENA_WIDTH / 2.0f;
+    player.y = ARENA_HEIGHT / 2.0f;
+    player.dy = 0;
+    player.hp = 5;
+    player.jumps = 0;
+    player.grounded = false;
     player.lastX = (int)player.x;
     player.lastY = (int)player.y;
+}
+
+void initGame(){
+	hideCursor();
+    srand((unsigned int)time(NULL)); // Seed RNG for different platforms each run
+
+	initArena();
+	generatePlatforms();
+	drawArena();
+	initPlayer();
+
     lastTime = clock();
 }
 
+// ========== INPUT HANDLING ==========
 void handleInput(float dt) {
     if (_kbhit()) {
         char key = _getch();
 
-        if (key == 'a' && player.x > 1) player.x -= PLAYER_SPEED * dt;
-        if (key == 'd' && player.x < ARENA_WIDTH - 2) player.x += PLAYER_SPEED * dt;
+        if (key == 'a' && player.x > 1) 
+            player.x -= PLAYER_SPEED * dt;
+
+        if (key == 'd' && player.x < ARENA_WIDTH - 2) 
+            player.x += PLAYER_SPEED * dt;
 
         if (key == 'w') {
             if (player.grounded) {
@@ -117,6 +139,39 @@ void handleInput(float dt) {
             }
         }
     }
+}
+
+// ========== PHYSICS ==========
+void checkVerticalCollision(float oldY, float newY, int px, bool isFalling) {
+    int startY = (int)oldY;
+    int endY = (int)newY;
+
+    // ===== CHECK ALL CELLS BETWEEN OLD AND NEW POSITION =====
+    if (isFalling) {// Falling down
+        // Check each cell we're passing through while falling
+        for (int checkY = startY + 1; checkY <= endY; checkY++) {
+            if (isInBounds(px, checkY) && isCollisionTile(arena[checkY][px])) {
+                player.y = (float)(checkY - 1);
+                player.dy = 0;
+                player.grounded = true;
+                player.jumps = 0;
+                return;
+            }
+        }
+    }
+	else {// Jumping up
+		// Check each cell we're passing through while jumping
+        for (int checkY = startY; checkY >= endY; checkY--) {
+            if (isInBounds(px, checkY) && isCollisionTile(arena[checkY][px])) {
+                player.y = (float)(checkY + 1);
+                player.dy = 0;
+                return;
+            }
+        }
+    }
+
+    // No collision, apply new position
+    player.y = newY;
 }
 
 void updatePhysics(float dt) {
@@ -133,62 +188,14 @@ void updatePhysics(float dt) {
 
     int px = (int)player.x;
 
-    // ===== CHECK ALL CELLS BETWEEN OLD AND NEW POSITION =====
 
-    if (player.dy > 0) {  // Falling down
-        int startY = (int)oldY;
-        int endY = (int)newY;
-
-        bool collided = false;
-
-        // Check each cell we're passing through while falling
-        for (int checkY = startY + 1; checkY <= endY; checkY++) {
-            if (checkY > 0 && checkY < ARENA_HEIGHT &&
-                px > 0 && px < ARENA_WIDTH - 1) {
-
-                if (arena[checkY][px] == PLATFORM_CHAR || arena[checkY][px] == WALL_CHAR) {
-                    // Land on top of the platform
-                    player.y = (float)(checkY - 1);
-                    player.dy = 0;
-                    player.grounded = true;
-                    player.jumps = 0;
-                    collided = true;
-                    break;
-                }
-            }
-        }
-
-        if (!collided) {
-            player.y = newY;
-        }
-    }
-    else if (player.dy < 0) {  // Jumping up
-        int startY = (int)oldY;
-        int endY = (int)newY;
-
-        bool collided = false;
-
-		// Check each cell we're passing through while jumping
-        for (int checkY = startY; checkY >= endY; checkY--) {
-            if (checkY >= 0 && checkY < ARENA_HEIGHT &&
-                px > 0 && px < ARENA_WIDTH - 1) {
-
-                if (arena[checkY][px] == PLATFORM_CHAR || arena[checkY][px] == WALL_CHAR) {
-                    // Stop below the platform
-                    player.y = (float)(checkY + 1);
-                    player.dy = 0;
-                    collided = true;
-                    break;
-                }
-            }
-        }
-
-        if (!collided) {
-            player.y = newY;
-        }
-    }
-    else {  // Not moving vertically
-        player.y = newY;
+    
+    if (player.dy > 0){
+		checkVerticalCollision(oldY, newY, px, true);
+    } else if (player.dy < 0) {
+		checkVerticalCollision(oldY, newY, px, false);
+    } else {
+		player.y = newY;;
     }
 
     // ===== Floor collision =====
@@ -206,8 +213,9 @@ void updatePhysics(float dt) {
     }
 }
 
-
+// ========== RENDERING ==========
 void render() {
+	// ===== Draw HUD =====
     gotoXY(0, 0);
     string hpStr = " HP: ";
     for (int i = 0; i < player.hp; i++) hpStr += "0-";
@@ -220,6 +228,8 @@ void render() {
     }
     cout << topBorder;
 
+	// ===== Draw Player =====
+	// Erase last position
     gotoXY(player.lastX, player.lastY);
     cout << ' ';
 
@@ -229,6 +239,7 @@ void render() {
     cout << PLAYER_CHAR;
 }
 
+// ========== MAIN LOOP ==========
 int main()
 {
 	initGame();
