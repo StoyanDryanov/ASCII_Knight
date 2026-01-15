@@ -20,6 +20,8 @@ const int MAX_JUMPS = 2;
 const float ATTACK_COOLDOWN = 30.0f;
 const float ATTACK_DURATION = 15.0f;
 
+const float DAMAGE_COOLDOWN = 60.0f;
+
 const char ENEMY_WALKER_CHAR = 'E';
 const float ENEMY_WALKER_SPEED = 0.2f;
 
@@ -60,6 +62,7 @@ struct Player {
     int lastX, lastY;
 	float attackCooldown;
 	Attack currentAttack;
+	float damageCooldown;
 };
 
 struct Enemy {
@@ -269,6 +272,7 @@ void initPlayer(){
     player.lastX = (int)player.x;
     player.lastY = (int)player.y;
 	player.attackCooldown = 0;
+    player.damageCooldown = 0;
 	player.currentAttack.active = false;
 	player.currentAttack.direction = ATTACK_NONE;
 	player.currentAttack.timer = 0;
@@ -405,6 +409,30 @@ void checkAttackCollision() {
     }
 }
 
+void checkPlayerEnemyCollision() {
+    if(player.damageCooldown > 0) 
+        return;
+
+	int px = (int)player.x;
+	int py = (int)player.y;
+
+    for (int i = 0; i < enemyCount; i++)
+    {
+		Enemy& enemy = enemies[i];
+
+        if (!enemy.active) continue;
+
+		int ex = (int)enemy.x;
+		int ey = (int)enemy.y;
+
+        if (px == ex && py == ey){
+			player.hp--;
+			player.damageCooldown = DAMAGE_COOLDOWN;
+            break;
+        }
+    }
+}
+
 void updateAttackTimers(float dt) {
 	// Decrease attack cooldown timer
     if (player.attackCooldown > 0) {
@@ -424,6 +452,14 @@ void updateAttackTimers(float dt) {
             player.currentAttack.timer = 0;
 		}
     }
+
+	// Decrease damage cooldown timer
+    if (player.damageCooldown > 0) {
+        player.damageCooldown -= dt;
+        if (player.damageCooldown < 0) {
+            player.damageCooldown = 0;
+        }
+	}
 }
 
 void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x,bool& grounded, int& jumps, bool isFalling) {
@@ -535,6 +571,7 @@ void updatePhysics(float dt) {
 	updateAttackTimers(dt);
 
 	checkAttackCollision();
+	checkPlayerEnemyCollision();
 
     // Apply gravity
     player.dy += GRAVITY * dt;
