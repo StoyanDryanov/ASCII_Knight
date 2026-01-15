@@ -760,7 +760,16 @@ void render() {
     player.lastX = (int)player.x;
     player.lastY = (int)player.y;
     gotoXY(player.lastX, player.lastY);
-    cout << PLAYER_CHAR;
+
+    if (player.damageCooldown > 0) {
+		int flashCycle = (int)(player.damageCooldown / 5) % 2;
+        if (flashCycle == 0) {
+            cout << PLAYER_CHAR;
+		}
+    } else {
+        cout << PLAYER_CHAR;
+    }
+    
 
 	renderAttack();
 }
