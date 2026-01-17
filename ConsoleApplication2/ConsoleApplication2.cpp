@@ -31,6 +31,18 @@ const float ENEMY_JUMPER_JUMP_FORCE = -1.0f;
 const float ENEMY_JUMPER_DETECTION_RANGE = 10.0f;
 const float ENEMY_JUMPER_JUMP_COOLDOWN = 90.0f;
 
+const char ENEMY_FLIER_CHAR = 'F';
+const float ENEMY_FLIER_SPEED = 0.2f;
+const float ENEMY_FLIER_DIVE_SPEED = 0.5f;
+const float ENEMY_FLIER_RISE_SPEED = 0.5f;
+const float ENEMY_FLIER_DIVE_DURATION = 60.0f;
+const float ENEMY_FLIER_RISE_DURATION = 60.0f;
+const float ENEMY_FLIER_MIN_HEIGHT = 5.0f;
+const float ENEMY_FLIER_MAX_HEIGHT = 15.0f;
+
+const char ENEMY_CRAWLER_CHAR = 'C';
+const float ENEMY_CRAWLER_SPEED = 0.3f;// Higher crawler speed causes unwanted behaviour
+
 // ========== STRUCTS ==========
 enum EnemyType {
     ENEMY_WALKER,
@@ -80,6 +92,9 @@ struct Enemy {
     int lastX, lastY;
 	int direction; // 1 = right, -1 = left
 	float jumpCooldown;
+    float flierTimer;
+	bool diving;
+	int crawlerState; // 0 = Right, 1 = Up, 2 = Left, 3 = Down
 };
 
 // ========== GLOBAL VARIABLES ==========
@@ -136,6 +151,8 @@ void spawnEnemy(EnemyType type, float x, float y) {
     enemy.lastX = (int)x;
     enemy.lastY = (int)y;
     enemy.jumpCooldown = 0;
+	enemy.flierTimer = 0;
+	enemy.diving = false;
 
     switch (type) {
     case ENEMY_WALKER:
@@ -147,12 +164,15 @@ void spawnEnemy(EnemyType type, float x, float y) {
         enemy.direction = 1;
         break;
     case ENEMY_FLIER:
-        enemy.dx = 0;
+        enemy.dx = ENEMY_FLIER_SPEED;
         enemy.direction = 1;
+		enemy.flierTimer = ENEMY_FLIER_RISE_DURATION;
+        enemy.diving = false;
         break;
     case ENEMY_CRAWLER:
-        enemy.dx = 0;
+        enemy.dx = ENEMY_CRAWLER_SPEED;
         enemy.direction = 1;
+        enemy.crawlerState = 0;
         break;
     case ENEMY_BOSS:
         enemy.dx = 0;
@@ -217,8 +237,10 @@ bool findValidSpawnPosition(float& x, float&y) {
 }
 
 void spawnWave(int waveNumber) {
-    int numWalkers = 2 + waveNumber;
-	int numJumpers = 2 + waveNumber;
+    int numWalkers = 0;
+	int numJumpers = 0;
+	int numFliers = 0;
+	int numCrawlers = 1;
 
     for (int i = 0; i < numWalkers; i++)
     {
@@ -237,6 +259,23 @@ void spawnWave(int waveNumber) {
             spawnEnemy(ENEMY_JUMPER, x, y);
 		}
     }
+
+    for (int i = 0; i < numFliers; i++)
+    {
+        float x, y;
+
+        if (findValidSpawnPosition(x, y)) {
+            spawnEnemy(ENEMY_FLIER, x, y);
+        }
+    }
+
+    for (int i = 0; i < numCrawlers; i++)
+    {
+        float x, y;
+        if (findValidSpawnPosition(x, y)) {
+            spawnEnemy(ENEMY_CRAWLER, x, y);
+        }
+	}
 }
 
 // ========== INITIALIZATION ==========
@@ -516,7 +555,22 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
     if (!enemy.active)
         return;
 
-    enemy.dy += GRAVITY * dt;
+    if (enemy.type == ENEMY_CRAWLER) {
+        if (isCollisionTile(arena[(int)enemy.y + 1][(int)enemy.x]) ||
+            isCollisionTile(arena[(int)enemy.y - 1][(int)enemy.x]) || 
+            isCollisionTile(arena[(int)enemy.y][(int)enemy.x + 1]) ||
+            isCollisionTile(arena[(int)enemy.y][(int)enemy.x - 1])) {
+            enemy.dy = 0;
+            return;
+        } else {
+            enemy.dy += GRAVITY * dt;
+        }
+    }
+    
+    if (enemy.type != ENEMY_FLIER) {
+        enemy.dy += GRAVITY * dt;
+    }
+    
 
     float oldY = enemy.y;
     float newY = enemy.y + enemy.dy * dt;
@@ -601,6 +655,76 @@ void updateJumperAI(Enemy& enemy, float dt) {
     }
 }
 
+void updateFlierAI(Enemy& enemy ,float dt) {
+	enemy.flierTimer -= dt;
+
+    if(enemy.flierTimer <= 0) {
+        if (enemy.diving) {
+            enemy.diving = false;
+            enemy.flierTimer = ENEMY_FLIER_RISE_DURATION;
+        } else {
+            enemy.diving = true;
+            enemy.flierTimer = ENEMY_FLIER_DIVE_DURATION;
+        }
+	}
+
+	float newX = enemy.x + enemy.dx * enemy.direction * dt;
+	int checkX = (int)newX;
+    int checkY = (int)enemy.y;
+
+    if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX])) {
+        enemy.direction *= -1; // Reverse direction
+	} else {
+        enemy.x = newX;
+    }
+
+    if (enemy.diving) {
+		float newY = enemy.y + ENEMY_FLIER_DIVE_SPEED * dt;
+		int nextY = (int)newY;
+
+        if (nextY < ARENA_HEIGHT - 2 && !isCollisionTile(arena[nextY][(int)enemy.x])) {
+            enemy.y = newY;
+        }
+    } else {
+        float newY = enemy.y - ENEMY_FLIER_RISE_SPEED * dt;
+        int nextY = (int)newY;
+
+        if (nextY > ENEMY_FLIER_MIN_HEIGHT && !isCollisionTile(arena[nextY][(int)enemy.x])) {
+            enemy.y = newY;
+        }
+
+        if (enemy.y < ENEMY_FLIER_MIN_HEIGHT) {
+            enemy.y = ENEMY_FLIER_MIN_HEIGHT;
+        }
+    }
+}
+
+void updateCrawlerAI(Enemy& enemy, float dt) {
+    float moveDist = enemy.dx * dt;
+    float newX = enemy.x;
+    float newY = enemy.y;
+
+    if (enemy.crawlerState == 0) newX += moveDist;      // Moving Right
+    else if (enemy.crawlerState == 1) newY -= moveDist; // Moving Up
+    else if (enemy.crawlerState == 2) newX -= moveDist; // Moving Left
+    else if (enemy.crawlerState == 3) newY += moveDist; // Moving Down
+
+    int nextX = (int)newX;
+    int nextY = (int)newY;
+
+    // Check for collisions at the next position
+    if (nextX < 1 || nextX >= ARENA_WIDTH - 1 || nextY < 1 || nextY > ARENA_HEIGHT - 1 || isCollisionTile(arena[nextY][nextX])) {
+        // Rotate 90 degrees once hitting an obstacle (0->1->2->3->0)
+        enemy.crawlerState = (enemy.crawlerState + 1) % 4;
+    }
+    else {
+        enemy.x = newX;
+        enemy.y = newY;
+    }
+}
+
+
+
 void updateEnemyAI(float dt) {
     for (int i = 0; i < enemyCount; i++)
     {
@@ -617,8 +741,10 @@ void updateEnemyAI(float dt) {
 				updateJumperAI(enemy, dt);
                 break;
             case ENEMY_FLIER:
+                updateFlierAI(enemy, dt);
                 break;
             case ENEMY_CRAWLER:
+				updateCrawlerAI(enemy, dt);
                 break;
             case ENEMY_BOSS:
                 break;
@@ -699,10 +825,10 @@ void renderEnemies() {
             cout << ENEMY_JUMPER_CHAR;
             break;
         case ENEMY_FLIER:
-            cout << 'F';
+            cout << ENEMY_FLIER_CHAR;
             break;
         case ENEMY_CRAWLER:
-            cout << 'C';
+            cout << ENEMY_CRAWLER_CHAR;
             break;
         case ENEMY_BOSS:
             cout << 'B';
