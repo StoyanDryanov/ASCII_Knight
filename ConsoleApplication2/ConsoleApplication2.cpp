@@ -728,26 +728,81 @@ void updateFlierAI(Enemy& enemy ,float dt) {
 
 void updateCrawlerAI(Enemy& enemy, float dt) {
     float moveDist = enemy.dx * dt;
-    float newX = enemy.x;
-    float newY = enemy.y;
 
-    if (enemy.crawlerState == 0) newX += moveDist;      // Moving Right
-    else if (enemy.crawlerState == 1) newY -= moveDist; // Moving Up
-    else if (enemy.crawlerState == 2) newX -= moveDist; // Moving Left
-    else if (enemy.crawlerState == 3) newY += moveDist; // Moving Down
+    // Define what's ahead based on current direction
+    int checkX = (int)enemy.x;
+    int checkY = (int)enemy.y;
 
-    int nextX = (int)newX;
-    int nextY = (int)newY;
+    // Calculate the position we're trying to move to
+    int nextX = checkX;
+    int nextY = checkY;
 
-    // Check for collisions at the next position
-    if (nextX < 1 || nextX >= ARENA_WIDTH - 1 || nextY < 1 || nextY > ARENA_HEIGHT - 1 || isCollisionTile(arena[nextY][nextX])) {
-        // Rotate 90 degrees once hitting an obstacle (0->1->2->3->0)
+    switch (enemy.crawlerState) {
+        case 0: // Moving Right
+            nextX += 1;
+            break;
+        case 1: // Moving Up
+            nextY -= 1;
+            break;
+        case 2: // Moving Left
+            nextX -= 1;
+            break;
+        case 3: // Moving Down
+            nextY += 1;
+            break;
+    }
+
+    // Check if next position is blocked
+    bool blocked = (nextX <= 0 || nextX >= ARENA_WIDTH - 1 ||
+        nextY <= 0 || nextY >= ARENA_HEIGHT - 1 ||
+        isCollisionTile(arena[nextY][nextX]));
+
+    if (blocked) {
+        // Turn 90 degrees clockwise when blocked
         enemy.crawlerState = (enemy.crawlerState + 1) % 4;
+
+        // Also check if we can move in the new direction
+        int newNextX = checkX;
+        int newNextY = checkY;
+
+        switch (enemy.crawlerState) {
+            case 0: newNextX += 1; 
+                break;
+            case 1: newNextY -= 1; 
+                break;
+            case 2: newNextX -= 1; 
+                break;
+            case 3: newNextY += 1; 
+                break;
+        }
+
+        // If still blocked after turning, keep turning
+        if (newNextX <= 0 || newNextX >= ARENA_WIDTH - 1 ||
+            newNextY <= 0 || newNextY >= ARENA_HEIGHT - 1 ||
+            isCollisionTile(arena[newNextY][newNextX])) {
+            // Try turning 90 degrees counterclockwise
+            enemy.crawlerState = (enemy.crawlerState + 2) % 4;
+        }
     }
     else {
-        enemy.x = newX;
-        enemy.y = newY;
+        // Move in current direction
+        switch (enemy.crawlerState) {
+        case 0: // Right
+            enemy.x += moveDist;
+            break;
+        case 1: // Up
+            enemy.y -= moveDist;
+            break;
+        case 2: // Left
+            enemy.x -= moveDist;
+            break;
+        case 3: // Down
+            enemy.y += moveDist;
+            break;
+        }
     }
+
+    
 }
 
 
