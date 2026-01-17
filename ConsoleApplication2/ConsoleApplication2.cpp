@@ -32,16 +32,17 @@ const float ENEMY_JUMPER_DETECTION_RANGE = 10.0f;
 const float ENEMY_JUMPER_JUMP_COOLDOWN = 90.0f;
 
 const char ENEMY_FLIER_CHAR = 'F';
-const float ENEMY_FLIER_SPEED = 0.2f;
-const float ENEMY_FLIER_DIVE_SPEED = 0.5f;
-const float ENEMY_FLIER_RISE_SPEED = 0.5f;
-const float ENEMY_FLIER_DIVE_DURATION = 60.0f;
-const float ENEMY_FLIER_RISE_DURATION = 60.0f;
+const float ENEMY_FLIER_SPEED = 0.1f;
+const float ENEMY_FLIER_DIVE_SPEED = 0.4f;
+const float ENEMY_FLIER_RISE_SPEED = 0.4f;
+const float ENEMY_FLIER_DIVE_DURATION = 120.0f;
+const float ENEMY_FLIER_RISE_DURATION = 120.0f;
 const float ENEMY_FLIER_MIN_HEIGHT = 5.0f;
 const float ENEMY_FLIER_MAX_HEIGHT = 15.0f;
 
 const char ENEMY_CRAWLER_CHAR = 'C';
 const float ENEMY_CRAWLER_SPEED = 0.3f;// Higher crawler speed causes unwanted behaviour
+
 
 // ========== STRUCTS ==========
 enum EnemyType {
@@ -50,6 +51,25 @@ enum EnemyType {
     ENEMY_FLIER,
     ENEMY_CRAWLER,
     ENEMY_BOSS
+};
+
+enum Color {
+    COLOR_BLACK = 0,
+    COLOR_DARK_BLUE = 1,
+    COLOR_DARK_GREEN = 2,
+    COLOR_DARK_CYAN = 3,
+    COLOR_DARK_RED = 4,
+    COLOR_DARK_MAGENTA = 5,
+    COLOR_DARK_YELLOW = 6,
+    COLOR_GRAY = 7,
+    COLOR_DARK_GRAY = 8,
+    COLOR_BLUE = 9,
+    COLOR_GREEN = 10,
+    COLOR_CYAN = 11,
+    COLOR_RED = 12,
+    COLOR_MAGENTA = 13,
+    COLOR_YELLOW = 14,
+    COLOR_WHITE = 15
 };
 
 enum AttackDirection {
@@ -124,6 +144,10 @@ bool isCollisionTile(char tile) {
 
 bool isInBounds(int x, int y) {
     return x > 0 && x < ARENA_WIDTH - 1 && y > 0 && y < ARENA_HEIGHT;
+}
+
+void setColor(int color) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
 }
 
 // ========== ENEMY MANAGMENT ==========
@@ -237,9 +261,9 @@ bool findValidSpawnPosition(float& x, float&y) {
 }
 
 void spawnWave(int waveNumber) {
-    int numWalkers = 0;
-	int numJumpers = 0;
-	int numFliers = 0;
+    int numWalkers = 1;
+	int numJumpers = 1;
+	int numFliers = 1;
 	int numCrawlers = 1;
 
     for (int i = 0; i < numWalkers; i++)
@@ -313,10 +337,13 @@ void generatePlatforms() {
 void drawArena() {
     for (int y = 0; y < ARENA_HEIGHT; y++) {
         for (int x = 0; x < ARENA_WIDTH; x++) {
+            setColor(COLOR_DARK_GRAY);
             cout << arena[y][x];
+            
         }
         cout << endl;
     }
+    setColor(COLOR_WHITE);
 }
 
 void initPlayer(){
@@ -577,7 +604,7 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
     enemy.grounded = false;
 
     int ex = (int)enemy.x;
-	int imaginaryJumps = 0; // Enemies don't have jumps, but checkVerticalCollision needs it
+	int imaginaryJumps = 0; // Some wnemies do have jumps now, and checkVerticalCollision needs it
 
     if (enemy.dy > 0) {
         checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded, imaginaryJumps, true);
@@ -819,15 +846,19 @@ void renderEnemies() {
 
         switch (enemy.type) {
         case ENEMY_WALKER:
+            setColor(COLOR_GREEN);
             cout << ENEMY_WALKER_CHAR;
             break;
         case ENEMY_JUMPER:
+            setColor(COLOR_YELLOW);
             cout << ENEMY_JUMPER_CHAR;
             break;
         case ENEMY_FLIER:
+            setColor(COLOR_CYAN);
             cout << ENEMY_FLIER_CHAR;
             break;
         case ENEMY_CRAWLER:
+            setColor(COLOR_MAGENTA);
             cout << ENEMY_CRAWLER_CHAR;
             break;
         case ENEMY_BOSS:
@@ -838,6 +869,7 @@ void renderEnemies() {
             break;
         }
     }
+    setColor(COLOR_WHITE);
 }
 
 // restores the background characters that were saved before drawing the attack
@@ -848,9 +880,12 @@ void clearAttack() {
         int y = player.currentAttack.savedPositions[i][1];
 
         gotoXY(x, y);
+
+        setColor(COLOR_DARK_GRAY);
         cout << player.currentAttack.savedChars[i];// print the original character
     }
 	player.currentAttack.numSavedChars = 0; // reset the count
+    setColor(COLOR_WHITE);
 }
 
 // saves the background characters before drawing attack, then draws the attack
@@ -872,7 +907,9 @@ void saveAndDrawAttack(int x, int y, const char* str, int len) {
 
 	// draw the attack over the saved characters
     gotoXY(x, y);
+    setColor(COLOR_YELLOW);
     cout << str;
+    setColor(COLOR_WHITE);
 }
 
 void renderAttack() {
@@ -926,21 +963,32 @@ void renderAttack() {
 void render() {
 	// ===== Draw HUD =====
     gotoXY(0, 0);
-    string hpStr = " HP: ";
-    for (int i = 0; i < player.hp; i++) hpStr += "0-";
+    setColor(COLOR_DARK_GRAY);
+    cout << "##";
 
+    setColor(COLOR_RED);
+    cout <<" HP: ";
+
+    setColor(COLOR_RED);
+    for (int i = 0; i < player.hp; i++) cout << "0-";
+
+    setColor(COLOR_DARK_CYAN);
     string controls = " (a/d move, w jump, i/j/k/l attack) ";
-    string topBorder = "##" + hpStr + controls;
+    cout << controls;
 
-    while (topBorder.length() < ARENA_WIDTH) {
-        topBorder += WALL_CHAR;
+    setColor(COLOR_DARK_GRAY);
+    int remaining = ARENA_WIDTH - 4 - 5 - (player.hp * 2) - controls.length();
+    for (int i = 0; i < remaining; i++) {
+        cout << WALL_CHAR;
     }
-    cout << topBorder;
+
+    setColor(COLOR_WHITE);
 
     renderEnemies();
 
 	// ===== Draw Player =====
 	// Erase last position
+    setColor(COLOR_WHITE);
     gotoXY(player.lastX, player.lastY);
     cout << ' ';
 
@@ -951,13 +999,15 @@ void render() {
     if (player.damageCooldown > 0) {
 		int flashCycle = (int)(player.damageCooldown / 5) % 2;
         if (flashCycle == 0) {
+            setColor(COLOR_DARK_RED);
             cout << PLAYER_CHAR;
 		}
     } else {
+        setColor(COLOR_WHITE);
         cout << PLAYER_CHAR;
     }
     
-
+    setColor(COLOR_WHITE);
 	renderAttack();
 }
 
