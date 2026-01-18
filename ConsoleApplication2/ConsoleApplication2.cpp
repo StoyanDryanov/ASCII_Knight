@@ -43,6 +43,16 @@ const float ENEMY_FLIER_MAX_HEIGHT = 15.0f;
 const char ENEMY_CRAWLER_CHAR = 'C';
 const float ENEMY_CRAWLER_SPEED = 0.3f;// Higher crawler speed causes unwanted behaviour
 
+const char ENEMY_BOSS_CHAR = 'B';
+const int BOSS_Y = ARENA_HEIGHT / 2 - 1;
+const int BOSS_X = ARENA_WIDTH / 2 - 1;
+const int BOSS_SIZE = 3;
+const int BOSS_HP = 5;
+const float BOSS_DAMAGE_COOLDOWN = 600.0f; // Boss can damage player every 3 seconds in order to not get eviscerated
+const float BOSS_EARTHQUAKE_INTERVAL = 180.0f;
+const float EARTHQUAKE_DURATION = 60.0f;
+
+
 
 // ========== STRUCTS ==========
 enum EnemyType {
@@ -73,22 +83,22 @@ enum Color {
 };
 
 enum AttackDirection {
-	ATTACK_NONE = 0,
-	ATTACK_UP,
-	ATTACK_DOWN,
-	ATTACK_LEFT,
-	ATTACK_RIGHT
+    ATTACK_NONE = 0,
+    ATTACK_UP,
+    ATTACK_DOWN,
+    ATTACK_LEFT,
+    ATTACK_RIGHT
 };
 
 struct Attack {
-	AttackDirection direction;
-	float timer; // countdown timer until ATTACK_DURATION reaches 0
+    AttackDirection direction;
+    float timer; // countdown timer until ATTACK_DURATION reaches 0
     bool active;
-	int lastX, lastY; // track last position to clear
-	AttackDirection lastDirection; // track last direction to clear
-	char savedChars[3]; // characters that was overwritten by the attack display
-	int savedPositions[3][2]; // positions of the overwritten characters
-	int numSavedChars; // number of characters saved
+    int lastX, lastY; // track last position to clear
+    AttackDirection lastDirection; // track last direction to clear
+    char savedChars[3]; // characters that was overwritten by the attack display
+    int savedPositions[3][2]; // positions of the overwritten characters
+    int numSavedChars; // number of characters saved
 };
 
 struct Player {
@@ -98,9 +108,9 @@ struct Player {
     int jumps;
     bool grounded;
     int lastX, lastY;
-	float attackCooldown;
-	Attack currentAttack;
-	float damageCooldown;
+    float attackCooldown;
+    Attack currentAttack;
+    float damageCooldown;
 };
 
 struct Enemy {
@@ -110,11 +120,13 @@ struct Enemy {
     bool grounded;
     bool active;
     int lastX, lastY;
-	int direction; // 1 = right, -1 = left
-	float jumpCooldown;
+    int direction; // 1 = right, -1 = left
+    float jumpCooldown;
     float flierTimer;
-	bool diving;
-	int crawlerState; // 0 = Right, 1 = Up, 2 = Left, 3 = Down
+    bool diving;
+    int crawlerState; // 0 = Right, 1 = Up, 2 = Left, 3 = Down
+	int hp; // for boss enemy
+	float damageCooldown;
 };
 
 // ========== GLOBAL VARIABLES ==========
@@ -126,9 +138,16 @@ Enemy* enemies = nullptr;
 int maxEnemies = 0;
 int enemyCount = 0;
 
+Enemy* boss = nullptr;
+int currentWave = 1;
+bool EarhquakeActive = false;
+float earthquakeTimer = 0;
+
+bool gameOver = false;
+
 // ========== FUTILITY FUNCTIONS ==========
-void gotoXY(int x, int y){
-    COORD coord = {(SHORT)x, (SHORT)y};
+void gotoXY(int x, int y) {
+    COORD coord = { (SHORT)x, (SHORT)y };
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
@@ -166,7 +185,7 @@ void spawnEnemy(EnemyType type, float x, float y) {
     }
 
     Enemy& enemy = enemies[enemyCount];
-	enemy.type = type;
+    enemy.type = type;
     enemy.x = x;
     enemy.y = y;
     enemy.dy = 0;
@@ -175,8 +194,8 @@ void spawnEnemy(EnemyType type, float x, float y) {
     enemy.lastX = (int)x;
     enemy.lastY = (int)y;
     enemy.jumpCooldown = 0;
-	enemy.flierTimer = 0;
-	enemy.diving = false;
+    enemy.flierTimer = 0;
+    enemy.diving = false;
 
     switch (type) {
     case ENEMY_WALKER:
@@ -190,7 +209,7 @@ void spawnEnemy(EnemyType type, float x, float y) {
     case ENEMY_FLIER:
         enemy.dx = ENEMY_FLIER_SPEED;
         enemy.direction = 1;
-		enemy.flierTimer = ENEMY_FLIER_RISE_DURATION;
+        enemy.flierTimer = ENEMY_FLIER_RISE_DURATION;
         enemy.diving = false;
         break;
     case ENEMY_CRAWLER:
@@ -199,32 +218,32 @@ void spawnEnemy(EnemyType type, float x, float y) {
         enemy.crawlerState = 0;
         break;
     case ENEMY_BOSS:
-        enemy.dx = 0;
-        enemy.direction = 1;
+		enemy.hp = BOSS_HP;
+        enemy.damageCooldown = BOSS_DAMAGE_COOLDOWN;
         break;
     }
 
     enemyCount++;
 }
 
-bool findValidSpawnPosition(float& x, float&y) {
-	int attempts = 0;
+bool findValidSpawnPosition(float& x, float& y) {
+    int attempts = 0;
 
     while (attempts < 100)
     {
-		x = (float)(rand() % (ARENA_WIDTH - 4) + 2);
-		y = (float)(rand() % (ARENA_HEIGHT - 4) + 2);
+        x = (float)(rand() % (ARENA_WIDTH - 4) + 2);
+        y = (float)(rand() % (ARENA_HEIGHT - 4) + 2);
 
-		int ix = (int)x;
-		int iy = (int)y;
+        int ix = (int)x;
+        int iy = (int)y;
 
-		// Check if spot is empty
+        // Check if spot is empty
         if (arena[iy][ix] != ' ') {
-			attempts++;
+            attempts++;
             continue;
         }
 
-		// Check if too close to player
+        // Check if too close to player
         float dx = x - player.x;
         float dy = y - player.y;
         float distSq = dx * dx + dy * dy;
@@ -232,12 +251,12 @@ bool findValidSpawnPosition(float& x, float&y) {
         if (distSq < 25.0f) {  // 5 * 5
             attempts++;
             continue;
-		}
+        }
 
         // Check if too close to other enemies
         bool tooClose = false;
         for (int j = 0; j < enemyCount; j++) {
-            if (!enemies[j].active) 
+            if (!enemies[j].active)
                 continue;
 
             float edx = x - enemies[j].x;
@@ -254,34 +273,58 @@ bool findValidSpawnPosition(float& x, float&y) {
         }
         else {
             attempts++;
-		}
+        }
     }
 
-	return false; // Failed to find a valid spot
+    return false; // Failed to find a valid spot
+}
+
+void removePlatforms() {
+    for (int y = 1; y < ARENA_HEIGHT - 1; y++)
+    {
+        for (int x = 1; x < ARENA_WIDTH - 1; x++)
+        {
+			if (isCollisionTile(arena[y][x])) {
+                arena[y][x] = ' ';
+                gotoXY(x, y);
+				cout << ' ';
+            }
+            
+        }
+    }
 }
 
 void spawnWave(int waveNumber) {
     int numWalkers = 1;
-	int numJumpers = 1;
-	int numFliers = 1;
-	int numCrawlers = 1;
+    int numJumpers = 1;
+    int numFliers = 1;
+    int numCrawlers = 1;
+
+    if (waveNumber == 5)
+    {
+        spawnEnemy(ENEMY_BOSS, BOSS_X, BOSS_Y);
+
+		removePlatforms(); // remove all platforms for boss fight
+
+		return;
+    }
 
     for (int i = 0; i < numWalkers; i++)
     {
-		float x, y;
+        float x, y;
 
         if (findValidSpawnPosition(x, y)) {
             spawnEnemy(ENEMY_WALKER, x, y);
-		}
+        }
     }
 
     for (int i = 0; i < numJumpers; i++)
-	{
+    {
         float x, y;
 
         if (findValidSpawnPosition(x, y)) {
             spawnEnemy(ENEMY_JUMPER, x, y);
-		}
+        }
     }
 
     for (int i = 0; i < numFliers; i++)
@@ -299,7 +342,7 @@ void spawnWave(int waveNumber) {
         if (findValidSpawnPosition(x, y)) {
             spawnEnemy(ENEMY_CRAWLER, x, y);
         }
-	}
+    }
 }
 
 // ========== INITIALIZATION ==========
@@ -339,14 +382,14 @@ void drawArena() {
         for (int x = 0; x < ARENA_WIDTH; x++) {
             setColor(COLOR_DARK_GRAY);
             cout << arena[y][x];
-            
+
         }
         cout << endl;
     }
     setColor(COLOR_WHITE);
 }
 
-void initPlayer(){
+void initPlayer() {
     player.x = ARENA_WIDTH / 2.0f;
     player.y = ARENA_HEIGHT / 2.0f;
     player.dy = 0;
@@ -355,31 +398,31 @@ void initPlayer(){
     player.grounded = false;
     player.lastX = (int)player.x;
     player.lastY = (int)player.y;
-	player.attackCooldown = 0;
+    player.attackCooldown = 0;
     player.damageCooldown = 0;
-	player.currentAttack.active = false;
-	player.currentAttack.direction = ATTACK_NONE;
-	player.currentAttack.timer = 0;
-	player.currentAttack.lastX = -1;
-	player.currentAttack.lastY = -1;
-	player.currentAttack.lastDirection = ATTACK_NONE;
-	player.currentAttack.numSavedChars = 0;
+    player.currentAttack.active = false;
+    player.currentAttack.direction = ATTACK_NONE;
+    player.currentAttack.timer = 0;
+    player.currentAttack.lastX = -1;
+    player.currentAttack.lastY = -1;
+    player.currentAttack.lastDirection = ATTACK_NONE;
+    player.currentAttack.numSavedChars = 0;
 }
 
-void initGame(){
-	hideCursor();
+void initGame() {
+    hideCursor();
     srand((unsigned int)time(NULL)); // Seed RNG for different platforms each run
 
-	initArena();
-	generatePlatforms();
-	drawArena();
-	initPlayer();
-	
-	maxEnemies = 10;
-    enemies = new Enemy[maxEnemies];
-	enemyCount = 0;
+    initArena();
+    generatePlatforms();
+    drawArena();
+    initPlayer();
 
-	spawnWave(1);
+    maxEnemies = 10;
+    enemies = new Enemy[maxEnemies];
+    enemyCount = 0;
+
+    spawnWave(5);
 
     lastTime = clock();
 }
@@ -389,18 +432,18 @@ void handleAttackInput(char key) {
     if (player.attackCooldown > 0 || player.currentAttack.active)
         return;
 
-	AttackDirection direction = ATTACK_NONE;
+    AttackDirection direction = ATTACK_NONE;
 
     if (key == 'i') direction = ATTACK_UP;
     else if (key == 'j') direction = ATTACK_LEFT;
     else if (key == 'k') direction = ATTACK_DOWN;
     else if (key == 'l') direction = ATTACK_RIGHT;
 
-	if (direction != ATTACK_NONE) {
+    if (direction != ATTACK_NONE) {
         player.currentAttack.active = true;
         player.currentAttack.direction = direction;
         player.currentAttack.timer = ATTACK_DURATION;
-		player.attackCooldown = ATTACK_COOLDOWN;
+        player.attackCooldown = ATTACK_COOLDOWN;
     }
 }
 
@@ -409,10 +452,10 @@ void handleInput(float dt) {
 
     char key = _getch();
 
-    if (key == 'a' && player.x > 2) 
+    if (key == 'a' && player.x > 2)
         player.x -= PLAYER_SPEED * dt;
 
-    if (key == 'd' && player.x < ARENA_WIDTH - 2) 
+    if (key == 'd' && player.x < ARENA_WIDTH - 2)
         player.x += PLAYER_SPEED * dt;
 
     if (key == 'w') {
@@ -426,9 +469,9 @@ void handleInput(float dt) {
             player.jumps++;
         }
     }
-    
 
-	handleAttackInput(key);// Handle attack input
+
+    handleAttackInput(key);// Handle attack input
 }
 
 // ========== PHYSICS ==========
@@ -436,56 +479,91 @@ void checkAttackCollision() {
     if (!player.currentAttack.active)
         return;
 
-	int px = (int)player.x;
-	int py = (int)player.y;
+    int px = (int)player.x;
+    int py = (int)player.y;
 
 
-	// Determine attack hit positions based on direction
+    // Determine attack hit positions based on direction
     int hitX[3], hitY[3];
-	int hitCount = 0;
+    int hitCount = 0;
 
     switch (player.currentAttack.direction) {
-        case ATTACK_UP:
-            hitX[0] = px - 1; hitY[0] = py - 1;
-            hitX[1] = px;     hitY[1] = py - 1;
-            hitX[2] = px + 1; hitY[2] = py - 1;
-            hitCount = 3;
-			break;
-        case ATTACK_DOWN:
-            hitX[0] = px - 1; hitY[0] = py + 1;
-            hitX[1] = px;     hitY[1] = py + 1;
-            hitX[2] = px + 1; hitY[2] = py + 1;
-			hitCount = 3;
-            break;
-        case ATTACK_LEFT:
-            hitX[0] = px - 1; hitY[0] = py - 1;
-            hitX[1] = px - 1; hitY[1] = py;
-			hitX[2] = px - 1; hitY[2] = py + 1;
-			hitCount = 3;
-            break;
-        case ATTACK_RIGHT:
-            hitX[0] = px + 1; hitY[0] = py - 1;
-			hitX[1] = px + 1; hitY[1] = py;
-			hitX[2] = px + 1; hitY[2] = py + 1;
-            hitCount = 3;
-			break;
-        default:
-            return;
+    case ATTACK_UP:
+        hitX[0] = px - 1; hitY[0] = py - 1;
+        hitX[1] = px;     hitY[1] = py - 1;
+        hitX[2] = px + 1; hitY[2] = py - 1;
+        hitCount = 3;
+        break;
+    case ATTACK_DOWN:
+        hitX[0] = px - 1; hitY[0] = py + 1;
+        hitX[1] = px;     hitY[1] = py + 1;
+        hitX[2] = px + 1; hitY[2] = py + 1;
+        hitCount = 3;
+        break;
+    case ATTACK_LEFT:
+        hitX[0] = px - 1; hitY[0] = py - 1;
+        hitX[1] = px - 1; hitY[1] = py;
+        hitX[2] = px - 1; hitY[2] = py + 1;
+        hitCount = 3;
+        break;
+    case ATTACK_RIGHT:
+        hitX[0] = px + 1; hitY[0] = py - 1;
+        hitX[1] = px + 1; hitY[1] = py;
+        hitX[2] = px + 1; hitY[2] = py + 1;
+        hitCount = 3;
+        break;
+    default:
+        return;
     }
 
-    for (int i = 0; i < enemyCount; i++){
-		Enemy& enemy = enemies[i];
+    for (int i = 0; i < enemyCount; i++) {
+
+        Enemy& enemy = enemies[i];
         if (!enemy.active)
             continue;
 
-		int ex = (int)enemy.x;
-		int ey = (int)enemy.y;
+        int ex = (int)enemy.x;
+        int ey = (int)enemy.y;
 
-        for (int h = 0; h < hitCount; h++){
-            if (ex == hitX[h] && ey == hitY[h]){
-				enemy.active = false; // Enemy is hit and deactivated
+        if (enemy.type == ENEMY_BOSS) {
+            if (enemy.damageCooldown > 0) {
+                continue;  // Boss is invincible
+            }
 
-				gotoXY(enemy.lastX, enemy.lastY);
+            int bx = (int)enemy.x;
+            int by = (int)enemy.y;
+
+            // Check if any attack hit position overlaps with the boss
+            for (int h = 0; h < hitCount; h++) {
+                // Boss occupies (bx, by) to (bx+2, by+2)
+                if (hitX[h] >= bx && hitX[h] <= bx + 2 &&
+                    hitY[h] >= by && hitY[h] <= by + 2) {
+
+                    enemy.hp--;
+                    enemy.damageCooldown = BOSS_DAMAGE_COOLDOWN;
+
+                    if (enemy.hp <= 0) {
+                        enemy.active = false;
+                        // Clear boss from screen
+                        for (int cy = 0; cy < BOSS_SIZE; cy++) {
+                            for (int cx = 0; cx < BOSS_SIZE; cx++) {
+                                gotoXY(bx + cx, by + cy);
+                                cout << ' ';
+                            }
+                        }
+                        gameOver = true;
+                    }
+                    return;  // One hit per attack
+                }
+            }
+            continue;
+        }
+
+        for (int h = 0; h < hitCount; h++) {
+            if (ex == hitX[h] && ey == hitY[h]) {
+                enemy.active = false; // Enemy is hit and deactivated
+
+                gotoXY(enemy.lastX, enemy.lastY);
                 cout << ' ';
                 break;
             }
@@ -494,59 +572,84 @@ void checkAttackCollision() {
 }
 
 void checkPlayerEnemyCollision() {
-    if(player.damageCooldown > 0) 
+    if (player.damageCooldown > 0)
         return;
 
-	int px = (int)player.x;
-	int py = (int)player.y;
+    int px = (int)player.x;
+    int py = (int)player.y;
 
     for (int i = 0; i < enemyCount; i++)
     {
-		Enemy& enemy = enemies[i];
+        Enemy& enemy = enemies[i];
 
         if (!enemy.active) continue;
 
-		int ex = (int)enemy.x;
-		int ey = (int)enemy.y;
+        int ex = (int)enemy.x;
+        int ey = (int)enemy.y;
 
-        if (px == ex && py == ey){
-			player.hp--;
-			player.damageCooldown = DAMAGE_COOLDOWN;
+        if (enemy.type == ENEMY_BOSS) {
+            int bx = (int)enemy.x;
+            int by = (int)enemy.y;
+
+            // Check if player is within the 3x3 boss area
+            // Boss occupies (bx, by) to (bx+2, by+2)
+            if (px >= bx && px <= bx + 2 && py >= by && py <= by + 2) {
+                player.hp--;
+                player.damageCooldown = DAMAGE_COOLDOWN;
+                return;
+            }
+            continue;
+        }
+
+        if (px == ex && py == ey) {
+            player.hp--;
+            player.damageCooldown = DAMAGE_COOLDOWN;
             break;
         }
     }
 }
 
 void updateAttackTimers(float dt) {
-	// Decrease attack cooldown timer
+    // Decrease attack cooldown timer
     if (player.attackCooldown > 0) {
-		player.attackCooldown -= dt;
+        player.attackCooldown -= dt;
 
         if (player.attackCooldown < 0) {
-			player.attackCooldown = 0;
+            player.attackCooldown = 0;
         }
     }
 
-	// Decrease current attack display timer
-	if (player.currentAttack.active) {
+    // Decrease current attack display timer
+    if (player.currentAttack.active) {
         player.currentAttack.timer -= dt;
         if (player.currentAttack.timer <= 0) {
             player.currentAttack.active = false;
             player.currentAttack.direction = ATTACK_NONE;
             player.currentAttack.timer = 0;
-		}
+        }
     }
 
-	// Decrease damage cooldown timer
+    // Decrease damage cooldown timer
     if (player.damageCooldown > 0) {
         player.damageCooldown -= dt;
         if (player.damageCooldown < 0) {
             player.damageCooldown = 0;
         }
-	}
+    }
+
+	// Decrease boss damage cooldown timer
+    if (boss != nullptr) {
+        if (boss->damageCooldown > 0) {
+           boss->damageCooldown -= dt;
+            if (boss->damageCooldown < 0) {
+                boss->damageCooldown = 0;
+            }
+    }
+    }
+    
 }
 
-void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x,bool& grounded, int& jumps, bool isFalling) {
+void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x, bool& grounded, int& jumps, bool isFalling) {
     int startY = (int)oldY;
     int endY = (int)newY;
 
@@ -563,8 +666,8 @@ void checkVerticalCollision(float& y, float& dy, float oldY, float newY, int x,b
             }
         }
     }
-	else {// Jumping up
-		// Check each cell we're passing through while jumping
+    else {// Jumping up
+        // Check each cell we're passing through while jumping
         for (int checkY = startY; checkY >= endY; checkY--) {
             if (isInBounds(x, checkY) && isCollisionTile(arena[checkY][x])) {
                 y = (float)(checkY + 1);
@@ -582,35 +685,38 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
     if (!enemy.active)
         return;
 
+    if (enemy.type == ENEMY_BOSS) return;
+
     if (enemy.type == ENEMY_CRAWLER) {
         if (isCollisionTile(arena[(int)enemy.y + 1][(int)enemy.x]) ||
-            isCollisionTile(arena[(int)enemy.y - 1][(int)enemy.x]) || 
+            isCollisionTile(arena[(int)enemy.y - 1][(int)enemy.x]) ||
             isCollisionTile(arena[(int)enemy.y][(int)enemy.x + 1]) ||
             isCollisionTile(arena[(int)enemy.y][(int)enemy.x - 1])) {
             enemy.dy = 0;
             return;
-        } else {
+        }
+        else {
             enemy.dy += GRAVITY * dt;
         }
     }
-    
+
     if (enemy.type != ENEMY_FLIER) {
         enemy.dy += GRAVITY * dt;
     }
-    
+
 
     float oldY = enemy.y;
     float newY = enemy.y + enemy.dy * dt;
     enemy.grounded = false;
 
     int ex = (int)enemy.x;
-	int imaginaryJumps = 0; // Some wnemies do have jumps now, and checkVerticalCollision needs it
+    int imaginaryJumps = 0; // Some wnemies do have jumps now, and checkVerticalCollision needs it
 
     if (enemy.dy > 0) {
         checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded, imaginaryJumps, true);
     }
     else if (enemy.dy < 0) {
-        checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded,imaginaryJumps, false);
+        checkVerticalCollision(enemy.y, enemy.dy, oldY, newY, ex, enemy.grounded, imaginaryJumps, false);
     }
     else {
         enemy.y = newY;;
@@ -631,88 +737,92 @@ void updateEnemyPhysics(Enemy& enemy, float dt) {
 }
 
 void updateWalkerAI(Enemy& enemy, float dt) {
-    if(!enemy.grounded) return;
+    if (!enemy.grounded) return;
 
-	float newX = enemy.x + enemy.dx * enemy.direction * dt;
-	int checkX = (int)newX;
-	int checkY = (int)enemy.y;
+    float newX = enemy.x + enemy.dx * enemy.direction * dt;
+    int checkX = (int)newX;
+    int checkY = (int)enemy.y;
 
     if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX]))
     {
-		enemy.direction *= -1; // Reverse direction
+        enemy.direction *= -1; // Reverse direction
         return;
     }
 
-	int groundCheckY = checkY + 1;
+    int groundCheckY = checkY + 1;
 
     if (groundCheckY < ARENA_HEIGHT && !isCollisionTile(arena[groundCheckY][checkX])) {
-		enemy.direction *= -1; // Reverse direction
+        enemy.direction *= -1; // Reverse direction
         return;
     }
 
-	enemy.x = newX;
+    enemy.x = newX;
 }
 
 void updateJumperAI(Enemy& enemy, float dt) {
-    if (enemy.jumpCooldown > 0){
-		enemy.jumpCooldown -= dt;
+    if (enemy.jumpCooldown > 0) {
+        enemy.jumpCooldown -= dt;
         if (enemy.jumpCooldown < 0)
             enemy.jumpCooldown = 0;
     }
 
-	float dx = player.x - enemy.x;
-	float dy = player.y - enemy.y;
-	float distance = sqrtf(dx * dx + dy * dy);
+    float dx = player.x - enemy.x;
+    float dy = player.y - enemy.y;
+    float distance = sqrtf(dx * dx + dy * dy);
 
-	float newX = enemy.x + enemy.dx * enemy.direction * dt;
-	int checkX = (int)newX;
-	int checkY = (int)enemy.y;
+    float newX = enemy.x + enemy.dx * enemy.direction * dt;
+    int checkX = (int)newX;
+    int checkY = (int)enemy.y;
 
     if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX]))
     {
         enemy.direction *= -1; // Reverse direction
-	} else {
-		enemy.x = newX;
+    }
+    else {
+        enemy.x = newX;
     }
 
     if (enemy.grounded && distance <= ENEMY_JUMPER_DETECTION_RANGE && enemy.jumpCooldown <= 0) {
         enemy.dy = ENEMY_JUMPER_JUMP_FORCE;
-		enemy.grounded = false;
-		enemy.jumpCooldown = ENEMY_JUMPER_JUMP_COOLDOWN;
+        enemy.grounded = false;
+        enemy.jumpCooldown = ENEMY_JUMPER_JUMP_COOLDOWN;
     }
 }
 
-void updateFlierAI(Enemy& enemy ,float dt) {
-	enemy.flierTimer -= dt;
+void updateFlierAI(Enemy& enemy, float dt) {
+    enemy.flierTimer -= dt;
 
-    if(enemy.flierTimer <= 0) {
+    if (enemy.flierTimer <= 0) {
         if (enemy.diving) {
             enemy.diving = false;
             enemy.flierTimer = ENEMY_FLIER_RISE_DURATION;
-        } else {
+        }
+        else {
             enemy.diving = true;
             enemy.flierTimer = ENEMY_FLIER_DIVE_DURATION;
         }
-	}
+    }
 
-	float newX = enemy.x + enemy.dx * enemy.direction * dt;
-	int checkX = (int)newX;
+    float newX = enemy.x + enemy.dx * enemy.direction * dt;
+    int checkX = (int)newX;
     int checkY = (int)enemy.y;
 
     if (checkX <= 1 || checkX >= ARENA_WIDTH - 1 || isCollisionTile(arena[checkY][checkX])) {
         enemy.direction *= -1; // Reverse direction
-	} else {
+    }
+    else {
         enemy.x = newX;
     }
 
     if (enemy.diving) {
-		float newY = enemy.y + ENEMY_FLIER_DIVE_SPEED * dt;
-		int nextY = (int)newY;
+        float newY = enemy.y + ENEMY_FLIER_DIVE_SPEED * dt;
+        int nextY = (int)newY;
 
         if (nextY < ARENA_HEIGHT - 2 && !isCollisionTile(arena[nextY][(int)enemy.x])) {
             enemy.y = newY;
         }
-    } else {
+    }
+    else {
         float newY = enemy.y - ENEMY_FLIER_RISE_SPEED * dt;
         int nextY = (int)newY;
 
@@ -738,18 +848,18 @@ void updateCrawlerAI(Enemy& enemy, float dt) {
     int nextY = checkY;
 
     switch (enemy.crawlerState) {
-        case 0: // Moving Right
-            nextX += 1;
-            break;
-        case 1: // Moving Up
-            nextY -= 1;
-            break;
-        case 2: // Moving Left
-            nextX -= 1;
-            break;
-        case 3: // Moving Down
-            nextY += 1;
-            break;
+    case 0: // Moving Right
+        nextX += 1;
+        break;
+    case 1: // Moving Up
+        nextY -= 1;
+        break;
+    case 2: // Moving Left
+        nextX -= 1;
+        break;
+    case 3: // Moving Down
+        nextY += 1;
+        break;
     }
 
     // Check if next position is blocked
@@ -766,14 +876,14 @@ void updateCrawlerAI(Enemy& enemy, float dt) {
         int newNextY = checkY;
 
         switch (enemy.crawlerState) {
-            case 0: newNextX += 1; 
-                break;
-            case 1: newNextY -= 1; 
-                break;
-            case 2: newNextX -= 1; 
-                break;
-            case 3: newNextY += 1; 
-                break;
+        case 0: newNextX += 1;
+            break;
+        case 1: newNextY -= 1;
+            break;
+        case 2: newNextX -= 1;
+            break;
+        case 3: newNextY += 1;
+            break;
         }
 
         // If still blocked after turning, keep turning
@@ -802,7 +912,7 @@ void updateCrawlerAI(Enemy& enemy, float dt) {
         }
     }
 
-    
+
 }
 
 
@@ -810,37 +920,37 @@ void updateCrawlerAI(Enemy& enemy, float dt) {
 void updateEnemyAI(float dt) {
     for (int i = 0; i < enemyCount; i++)
     {
-		Enemy& enemy = enemies[i];
-        if (!enemy.active) 
+        Enemy& enemy = enemies[i];
+        if (!enemy.active)
             continue;
 
         switch (enemy.type)
         {
-            case ENEMY_WALKER:
-                updateWalkerAI(enemy, dt);
-			    break;
-            case ENEMY_JUMPER:
-				updateJumperAI(enemy, dt);
-                break;
-            case ENEMY_FLIER:
-                updateFlierAI(enemy, dt);
-                break;
-            case ENEMY_CRAWLER:
-				updateCrawlerAI(enemy, dt);
-                break;
-            case ENEMY_BOSS:
-                break;
-            default:
-                break;
+        case ENEMY_WALKER:
+            updateWalkerAI(enemy, dt);
+            break;
+        case ENEMY_JUMPER:
+            updateJumperAI(enemy, dt);
+            break;
+        case ENEMY_FLIER:
+            updateFlierAI(enemy, dt);
+            break;
+        case ENEMY_CRAWLER:
+            updateCrawlerAI(enemy, dt);
+            break;
+        case ENEMY_BOSS:
+            break;
+        default:
+            break;
         }
     }
 }
 
 void updatePhysics(float dt) {
-	updateAttackTimers(dt);
+    updateAttackTimers(dt);
 
-	checkAttackCollision();
-	checkPlayerEnemyCollision();
+    checkAttackCollision();
+    checkPlayerEnemyCollision();
 
     // Apply gravity
     player.dy += GRAVITY * dt;
@@ -856,13 +966,15 @@ void updatePhysics(float dt) {
     int px = (int)player.x;
 
 
-    
-    if (player.dy > 0){
-		checkVerticalCollision(player.y, player.dy,oldY, newY, px,player.grounded,player.jumps, true);
-    } else if (player.dy < 0) {
+
+    if (player.dy > 0) {
+        checkVerticalCollision(player.y, player.dy, oldY, newY, px, player.grounded, player.jumps, true);
+    }
+    else if (player.dy < 0) {
         checkVerticalCollision(player.y, player.dy, oldY, newY, px, player.grounded, player.jumps, false);
-    } else {
-		player.y = newY;;
+    }
+    else {
+        player.y = newY;;
     }
 
     // ===== Floor collision =====
@@ -887,6 +999,34 @@ void updatePhysics(float dt) {
 }
 
 // ========== RENDERING ==========
+void renderBoss() {
+    for (int i = 0; i < enemyCount; i++) {
+        if (enemies[i].type == ENEMY_BOSS && enemies[i].active) {
+            boss = &enemies[i];
+            break;
+        }
+    }
+
+    if (boss == nullptr) return;
+
+    if (boss->damageCooldown > 0) {
+        // Flash Red and Dark Red
+        setColor((int)boss->damageCooldown % 10 < 5 ? COLOR_RED : COLOR_DARK_RED);
+    }
+    else {
+        setColor(COLOR_RED);
+    }
+
+    int bx = (int)boss->x;
+    int by = (int)boss->y;
+    for (int y = 0; y < BOSS_SIZE; y++) {
+        for (int x = 0; x < BOSS_SIZE; x++) {
+            gotoXY(bx + x, by + y);
+            cout << ENEMY_BOSS_CHAR;
+        }
+    }
+}
+
 void renderEnemies() {
     for (int i = 0; i < enemyCount; i++) {
         Enemy& enemy = enemies[i];
@@ -917,7 +1057,7 @@ void renderEnemies() {
             cout << ENEMY_CRAWLER_CHAR;
             break;
         case ENEMY_BOSS:
-            cout << 'B';
+            renderBoss();
             break;
         default:
             cout << 'X';
@@ -939,7 +1079,7 @@ void clearAttack() {
         setColor(COLOR_DARK_GRAY);
         cout << player.currentAttack.savedChars[i];// print the original character
     }
-	player.currentAttack.numSavedChars = 0; // reset the count
+    player.currentAttack.numSavedChars = 0; // reset the count
     setColor(COLOR_WHITE);
 }
 
@@ -949,10 +1089,10 @@ void saveAndDrawAttack(int x, int y, const char* str, int len) {
     for (int i = 0; i < len; i++) {
         if (x + i >= 0 && x + i < ARENA_WIDTH && y >= 0 && y < ARENA_HEIGHT) {
             int idx = player.currentAttack.numSavedChars;
-			if (idx < 3) { // ensure we don't exceed the array bounds
-				// save the character
+            if (idx < 3) { // ensure we don't exceed the array bounds
+                // save the character
                 player.currentAttack.savedChars[idx] = arena[y][x + i];
-				// save the position of the character
+                // save the position of the character
                 player.currentAttack.savedPositions[idx][0] = x + i;
                 player.currentAttack.savedPositions[idx][1] = y;
                 player.currentAttack.numSavedChars++;
@@ -960,7 +1100,7 @@ void saveAndDrawAttack(int x, int y, const char* str, int len) {
         }
     }
 
-	// draw the attack over the saved characters
+    // draw the attack over the saved characters
     gotoXY(x, y);
     setColor(COLOR_YELLOW);
     cout << str;
@@ -968,30 +1108,30 @@ void saveAndDrawAttack(int x, int y, const char* str, int len) {
 }
 
 void renderAttack() {
-	// clear previous attack display if needed
+    // clear previous attack display if needed
     if (player.currentAttack.lastDirection != ATTACK_NONE) {
         // clear if player moved OR if attack is no longer active
         bool playerMoved = (player.currentAttack.lastX != (int)player.x ||
-                            player.currentAttack.lastY != (int)player.y);
+            player.currentAttack.lastY != (int)player.y);
         if (!player.currentAttack.active || playerMoved)
         {
-			clearAttack(); // restore background
+            clearAttack(); // restore background
             player.currentAttack.lastDirection = ATTACK_NONE;
         }
     }
-	
+
     if (!player.currentAttack.active) return;
 
-	int px = (int)player.x;
-	int py = (int)player.y;
+    int px = (int)player.x;
+    int py = (int)player.y;
 
-	// save current position and direction for next frame
+    // save current position and direction for next frame
     player.currentAttack.lastX = px;
     player.currentAttack.lastY = py;
-	player.currentAttack.lastDirection = player.currentAttack.direction;
+    player.currentAttack.lastDirection = player.currentAttack.direction;
 
-	//reset saved characters count
-	player.currentAttack.numSavedChars = 0;
+    //reset saved characters count
+    player.currentAttack.numSavedChars = 0;
 
     switch (player.currentAttack.direction) {
     case ATTACK_UP:
@@ -1016,13 +1156,13 @@ void renderAttack() {
 }
 
 void render() {
-	// ===== Draw HUD =====
+    // ===== Draw HUD =====
     gotoXY(0, 0);
     setColor(COLOR_DARK_GRAY);
     cout << "##";
 
     setColor(COLOR_RED);
-    cout <<" HP: ";
+    cout << " HP: ";
 
     setColor(COLOR_RED);
     for (int i = 0; i < player.hp; i++) cout << "0-";
@@ -1041,8 +1181,8 @@ void render() {
 
     renderEnemies();
 
-	// ===== Draw Player =====
-	// Erase last position
+    // ===== Draw Player =====
+    // Erase last position
     setColor(COLOR_WHITE);
     gotoXY(player.lastX, player.lastY);
     cout << ' ';
@@ -1052,38 +1192,39 @@ void render() {
     gotoXY(player.lastX, player.lastY);
 
     if (player.damageCooldown > 0) {
-		int flashCycle = (int)(player.damageCooldown / 5) % 2;
+        int flashCycle = (int)(player.damageCooldown / 5) % 2;
         if (flashCycle == 0) {
             setColor(COLOR_DARK_RED);
             cout << PLAYER_CHAR;
-		}
-    } else {
+        }
+    }
+    else {
         setColor(COLOR_WHITE);
         cout << PLAYER_CHAR;
     }
-    
+
     setColor(COLOR_WHITE);
-	renderAttack();
+    renderAttack();
 }
 
 // ========== MAIN LOOP ==========
 int main()
 {
-	initGame();
+    initGame();
 
-    while (player.hp > 0)
+    while (player.hp > 0 && !gameOver)
     {
         clock_t currentTime = clock();
         float dt = float(currentTime - lastTime) / CLOCKS_PER_SEC * 60.0f;
-		lastTime = currentTime;
+        lastTime = currentTime;
 
-		handleInput(dt);
+        handleInput(dt);
         updatePhysics(dt);
-		render();
+        render();
 
-		Sleep(16);
+        Sleep(16);
     }
 
-	delete[] enemies;
+    delete[] enemies;
     return 0;
 }
