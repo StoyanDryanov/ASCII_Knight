@@ -1,4 +1,13 @@
 /*
+  Solution to course project #10
+  Introduction to programming course
+  Faculty of Mathemathics and Informatics of Sofia University
+  Winter semester 2025/2026
+
+  @author: Стоян Златев Дрянов
+  @idnumber 5MI0600612
+  @compiler VC
+
   ASCII Knight - Main game file for a simple ASCII arena game.
 
   - Player can move, jump (double jump), and perform directional attacks.
