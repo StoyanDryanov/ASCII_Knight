@@ -708,7 +708,7 @@ void spawnLightning() {
     }
 
     // Clear remaining slots
-    for (int i = numStrikes; i < 10; i++) {
+    for (int i = numStrikes; i < 16; i++) {
         lightningStrikes[i].active = false;
     }
 }
