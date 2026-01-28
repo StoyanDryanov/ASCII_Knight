@@ -717,7 +717,7 @@ void spawnLightning() {
 void drawLightning() {
     setColor(COLOR_YELLOW);
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 16; i++) {
         if (!lightningStrikes[i].active) continue;
 
         int x = lightningStrikes[i].x;
