@@ -70,7 +70,7 @@ const float ENEMY_FLIER_MIN_HEIGHT = 5.0f;
 const float ENEMY_FLIER_MAX_HEIGHT = 15.0f;
 
 const char ENEMY_CRAWLER_CHAR = 'C';
-const float ENEMY_CRAWLER_SPEED = 0.3f; // Note: higher crawler speed can cause unwanted behaviour
+const float ENEMY_CRAWLER_SPEED = 0.6f; // Note: higher crawler speed can cause unwanted behaviour
 
 // Boss configuration - placed near center of arena
 const char ENEMY_BOSS_CHAR = 'B';
@@ -1267,7 +1267,7 @@ void updateFlierAI(Enemy& enemy, float dt) {
 
 // Crawler: attempts to rotate when blocked by obstacle.
 void updateCrawlerAI(Enemy& enemy, float dt) {
-    float moveDist = enemy.dx * dt;
+    float moveDist = enemy.dx * ENEMY_CRAWLER_SPEED * dt;
 
     // Determine current integer cell and next cell based on crawlerState
     int checkX = (int)enemy.x;
