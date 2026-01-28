@@ -1267,7 +1267,7 @@ void updateFlierAI(Enemy& enemy, float dt) {
 
 // Crawler: attempts to rotate when blocked by obstacle.
 void updateCrawlerAI(Enemy& enemy, float dt) {
-    float moveDist = enemy.dx * ENEMY_CRAWLER_SPEED * dt;
+    float moveDist = enemy.dx * enemy.dx * dt;
 
     // Determine current integer cell and next cell based on crawlerState
     int checkX = (int)enemy.x;
